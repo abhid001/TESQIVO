@@ -1,0 +1,61 @@
+[project]
+name = "tesqivo"
+version = "0.1.0"
+description = "TESQIVO - open-source API-first test management platform (Phase 1)"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi==0.115.6",
+    "uvicorn[standard]==0.34.0",
+    "sqlalchemy[asyncio]==2.0.36",
+    "asyncpg==0.30.0",
+    "psycopg[binary]==3.2.3",
+    "alembic==1.14.0",
+    "pydantic[email]==2.10.4",
+    "pydantic-settings==2.7.0",
+    "argon2-cffi==23.1.0",
+    "python-multipart==0.0.20",
+    "redis==5.2.1",
+    "rq==2.1.0",
+    "httpx==0.28.1",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest==8.3.4",
+    "pytest-asyncio==0.25.0",
+    "pytest-cov==6.0.0",
+    "ruff==0.8.4",
+    "mypy==1.14.0",
+    "aiosqlite==0.20.0",
+]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+filterwarnings = ["error::DeprecationWarning"]
+
+[tool.ruff]
+line-length = 110
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "C4", "SIM"]
+ignore = ["E501", "B008", "SIM117", "E402", "E741", "C408", "B904", "SIM105"]
+
+[tool.ruff.lint.per-file-ignores]
+"app/models.py" = ["E501"]
+"tests/*" = ["E501", "F401", "F841"]
+"alembic/*" = ["E501"]
+
+[tool.mypy]
+python_version = "3.12"
+plugins = ["pydantic.mypy"]
+strict = true
+ignore_missing_imports = true
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["app*"]

@@ -1,0 +1,23 @@
+# TESQIVO reverse proxy - serves the built SPA and proxies the API.
+# For local/self-hosted HTTP use :80. For TLS, replace `:80` with your domain
+# and Caddy will obtain a certificate automatically.
+
+:80 {
+	encode gzip
+
+	handle /api/* {
+		reverse_proxy api:8000
+	}
+
+	handle {
+		root * /srv/www
+		try_files {path} /index.html
+		file_server
+	}
+
+	header {
+		X-Content-Type-Options nosniff
+		X-Frame-Options DENY
+		Referrer-Policy strict-origin-when-cross-origin
+	}
+}

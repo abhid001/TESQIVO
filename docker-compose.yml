@@ -1,0 +1,86 @@
+name: tesqivo
+
+x-app-env: &app-env
+  TESQIVO_DB_URL: postgresql+asyncpg://tesqivo:${POSTGRES_PASSWORD:-tesqivo}@db:5432/tesqivo
+  TESQIVO_REDIS_URL: redis://redis:6379/0
+  TESQIVO_SECRET_KEY: ${TESQIVO_SECRET_KEY:?set TESQIVO_SECRET_KEY in .env (>=32 bytes)}
+  TESQIVO_PUBLIC_URL: ${TESQIVO_PUBLIC_URL:-http://localhost:8080}
+  TESQIVO_BOOTSTRAP_TOKEN: ${TESQIVO_BOOTSTRAP_TOKEN:-}
+  TESQIVO_ATTACHMENT_DIR: /data/attachments
+  TESQIVO_ENVIRONMENT: production
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: tesqivo
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-tesqivo}
+      POSTGRES_DB: tesqivo
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tesqivo -d tesqivo"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--save", "60", "1"]
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  migrate:
+    build: ./backend
+    command: ["sh", "-c", "python -m app.cli wait-db && alembic upgrade head"]
+    environment: *app-env
+    depends_on:
+      db:
+        condition: service_healthy
+
+  api:
+    build: ./backend
+    environment: *app-env
+    volumes:
+      - attachments:/data/attachments
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  worker:
+    build: ./backend
+    command: ["python", "-m", "app.worker"]
+    environment: *app-env
+    volumes:
+      - attachments:/data/attachments
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  proxy:
+    build:
+      context: ./frontend
+    ports:
+      - "${TESQIVO_HTTP_PORT:-8080}:80"
+    volumes:
+      - caddydata:/data
+    depends_on:
+      - api
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+  redisdata:
+  attachments:
+  caddydata:
