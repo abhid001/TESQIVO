@@ -27,3 +27,4 @@ data/
 backend/.pytest_tesqivo.db*
 *.db
 frontend/dist/
+.DS_Store
