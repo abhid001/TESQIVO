@@ -30,7 +30,7 @@ Scope for the report: project DEMO, release REL-1, cycle CYC-1, env staging, bui
 | M-05 Design coverage | 2 active reqs w/ qualifying linked TC / 2 active reqs | **100.0%** |
 | M-06 Plan coverage | 2 active reqs w/ qualifying linked cycle test in scope / 2 | **100.0%** |
 | M-07 Execution coverage | 2 active reqs w/ linked scoped cycle test w/ terminal attempt / 2 | **100.0%** |
-| M-08 Pass coverage | reqs where every qualifying in-scope test PASSED (0: REQ-2's test failed) / reqs with ≥1 qualifying in-scope test (2) | **0.0%** |
+| M-08 Pass coverage | see note below / reqs with ≥1 qualifying in-scope test (2) | **0.0%** |
 | M-09 Requirements uncovered | active reqs with zero qualifying linked tests | **0** |
 | M-10 Open critical defects | distinct Critical defects not Closed/Rejected | **1** |
 | M-11 Defect-affected requirements | active reqs with direct or supported execution-mediated link to Open/In-Progress Critical/High defect (REQ-2 direct; REQ-2 also via TC-2→CT→attempt→DEF-1) | **1** |
@@ -39,6 +39,22 @@ Scope for the report: project DEMO, release REL-1, cycle CYC-1, env staging, bui
 
 Acceptance §19.5 asserts exactly: Design 100, Plan 100, Execution 100, Pass 0,
 Requirements Uncovered 0, Open Critical Defects 1, Defect-Affected Requirements 1. ✔
+
+### Decision D-017 — M-08 Pass Coverage interpretation
+
+PRS §19.5 requires **Pass Coverage 0%** for a scope with "one passed test, one failed
+test", while also requiring **Defect-Affected Requirements 1**. Under a purely
+per-requirement reading of M-08 (`REQ-1→TC-1 passed` ⇒ REQ-1 counts) the fixture
+yields 50%, not 0%; the only fixtures that yield 0% per-requirement force the failed
+test to be linked to a requirement that is then *also* execution-mediated
+defect-affected, making Defect-Affected Requirements 2. The two stated numbers are
+only simultaneously satisfiable if **M-08 evaluates "every qualifying in-scope test
+is Passed" across the whole selected scope** (PRS §9.1: *"Pass Coverage uses all
+qualifying in-scope tests"*): a requirement earns pass coverage only when every
+qualifying in-scope test it depends on passed **and nothing in the wider qualifying
+in-scope set failed / was blocked / not run / in progress**. Implemented in
+`app/domain/reporting.py::compute_all` (M-08) and asserted by
+`tests/test_acceptance.py`.
 
 ## Fixture B — "half covered" (acceptance §19.5 secondary — verifies 50%)
 

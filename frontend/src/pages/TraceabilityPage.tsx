@@ -1,0 +1,86 @@
+import { useParams } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
+import { useState } from "react";
+import { http } from "../api/client";
+import { useProject } from "../api/hooks";
+import type { Cycle, MatrixRow } from "../api/types";
+import { Badge, EmptyState } from "../ui";
+
+export function TraceabilityPage() {
+  const { projectKey } = useParams();
+  const { project } = useProject(projectKey);
+  const pid = project?.id;
+  const [cycleId, setCycleId] = useState("");
+
+  const cycles = useQuery({
+    queryKey: ["cycles", pid],
+    queryFn: () => http.get<Cycle[]>(`/projects/${pid}/cycles`),
+    enabled: !!pid,
+  });
+  const matrix = useQuery({
+    queryKey: ["matrix", pid, cycleId],
+    queryFn: () =>
+      http.get<{ rows: MatrixRow[] }>(
+        `/projects/${pid}/traceability/matrix${cycleId ? `?cycle_id=${cycleId}` : ""}`,
+      ),
+    enabled: !!pid,
+  });
+
+  if (!project) return <p>Loading…</p>;
+
+  return (
+    <>
+      <div className="page-header">
+        <h2>Traceability matrix</h2>
+        <select value={cycleId} onChange={(e) => setCycleId(e.target.value)}>
+          <option value="">Design view (no cycle)</option>
+          {cycles.data?.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.key} · {c.name}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      {matrix.data && matrix.data.rows.length > 0 ? (
+        <div className="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Requirement</th>
+                <th>Status</th>
+                <th>Linked test cases</th>
+                <th>Planned versions</th>
+                <th>Latest results</th>
+              </tr>
+            </thead>
+            <tbody>
+              {matrix.data.rows.map((r) => (
+                <tr key={r.requirement_key}>
+                  <td className="key">
+                    {r.requirement_key}
+                    <div className="muted" style={{ whiteSpace: "normal" }}>
+                      {r.requirement_title}
+                    </div>
+                  </td>
+                  <td>
+                    <Badge value={r.requirement_status} />
+                  </td>
+                  <td>{r.linked_test_case_keys.join(", ") || <span className="muted">—</span>}</td>
+                  <td>{r.planned_version_labels.join(", ") || <span className="muted">—</span>}</td>
+                  <td className="inline-actions">
+                    {r.latest_results.length
+                      ? r.latest_results.map((res, i) => <Badge key={i} value={res} />)
+                      : <span className="muted">—</span>}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <EmptyState>No requirements yet. Add some in Requirements &amp; Defects.</EmptyState>
+      )}
+    </>
+  );
+}

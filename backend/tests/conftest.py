@@ -8,7 +8,11 @@ import os
 import uuid
 from collections.abc import AsyncIterator
 
-os.environ.setdefault("TESQIVO_DB_URL", "sqlite+aiosqlite:///./.pytest_tesqivo.db")
+# CI can point the suite at a real PostgreSQL by exporting TESQIVO_TEST_DB_URL.
+os.environ.setdefault(
+    "TESQIVO_DB_URL",
+    os.environ.get("TESQIVO_TEST_DB_URL", "sqlite+aiosqlite:///./.pytest_tesqivo.db"),
+)
 os.environ.setdefault("TESQIVO_REDIS_URL", "redis://localhost:6379/15")
 os.environ.setdefault("TESQIVO_SECRET_KEY", "test-secret-key-that-is-definitely-long-enough-xx")
 os.environ.setdefault("TESQIVO_PUBLIC_URL", "http://testserver")
@@ -29,18 +33,31 @@ DB_FILE = "./.pytest_tesqivo.db"
 
 @pytest_asyncio.fixture(scope="function")
 async def app():
-    for f in (DB_FILE, DB_FILE + "-shm", DB_FILE + "-wal"):
-        try:
-            os.remove(f)
-        except FileNotFoundError:
-            pass
+    is_sqlite = get_settings_url().startswith("sqlite")
+    if is_sqlite:
+        for f in (DB_FILE, DB_FILE + "-shm", DB_FILE + "-wal"):
+            try:
+                os.remove(f)
+            except FileNotFoundError:
+                pass
     reset_engine_for_tests()
     engine = get_engine()
     async with engine.begin() as conn:
+        if not is_sqlite:
+            await conn.run_sync(Base.metadata.drop_all)
         await conn.run_sync(Base.metadata.create_all)
     application = create_app()
     yield application
+    async with engine.begin() as conn:
+        if not is_sqlite:
+            await conn.run_sync(Base.metadata.drop_all)
     await engine.dispose()
+
+
+def get_settings_url() -> str:
+    from app.core.config import get_settings
+
+    return get_settings().db_url
 
 
 @pytest_asyncio.fixture(scope="function")

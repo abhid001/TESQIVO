@@ -22,3 +22,8 @@ data/
 # IDE
 .idea/
 .vscode/
+
+# test artifacts
+backend/.pytest_tesqivo.db*
+*.db
+frontend/dist/
