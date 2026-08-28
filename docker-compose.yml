@@ -61,6 +61,18 @@ services:
     environment: *app-env
     volumes:
       - attachments:/data/attachments
+    # The worker has no HTTP server; verify its runtime dependencies instead of
+    # the API image's default curl healthcheck.
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import os,redis; redis.from_url(os.environ['TESQIVO_REDIS_URL']).ping()"
+      interval: 20s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
     depends_on:
       migrate:
         condition: service_completed_successfully
