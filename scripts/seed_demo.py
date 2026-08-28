@@ -3,7 +3,7 @@
 
 Usage:
     backend/.venv/bin/python scripts/seed_demo.py \
-        --base http://localhost:8080 --user admin --password 'TesqivoAdmin!2026'
+        --base http://localhost:8080 --user admin --password '<admin password>'
 
 Idempotent-ish: if the demo project key already exists it exits without changes.
 Drives the public REST API exactly like the GUI would.
