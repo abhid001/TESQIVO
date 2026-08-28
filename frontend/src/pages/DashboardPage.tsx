@@ -4,6 +4,7 @@ import { useState } from "react";
 import { http } from "../api/client";
 import { useProject, useList } from "../api/hooks";
 import type {
+  CoverageByType,
   Cycle,
   CycleBreakdownRow,
   Metric,
@@ -186,6 +187,46 @@ function ReleaseRollup({
   );
 }
 
+function CoverageTypeCard({ cbt }: { cbt: CoverageByType }) {
+  const t = cbt.tests;
+  const rc = cbt.requirement_coverage;
+  const autoW = t.total ? (t.automated / t.total) * 100 : 0;
+  const manW = t.total ? (t.manual / t.total) * 100 : 0;
+  const naW = t.total ? (t.not_applicable / t.total) * 100 : 0;
+  return (
+    <div className="stack">
+      <div>
+        <div className="cm-label">Repository mix ({t.total} approved/active tests)</div>
+        <div className="stack-bar">
+          <span style={{ width: `${autoW}%`, background: "var(--sec-backlog)" }} title={`${t.automated} automated`} />
+          <span style={{ width: `${manW}%`, background: "var(--sec-cycles)" }} title={`${t.manual} manual`} />
+          <span style={{ width: `${naW}%`, background: "var(--surface-3)" }} title={`${t.not_applicable} not applicable`} />
+        </div>
+        <div className="inline-actions" style={{ marginTop: 6 }}>
+          <span className="badge" style={{ color: "var(--sec-backlog)" }}>{t.automated} automated</span>
+          <span className="badge" style={{ color: "var(--sec-cycles)" }}>{t.manual} manual</span>
+          <span className="badge">{t.not_applicable} N/A</span>
+        </div>
+      </div>
+      <div className="metric-list">
+        <div className="metric-row" style={{ cursor: "default" }}>
+          <div className="metric-row-label">Requirements covered by an automated test</div>
+          <Bar value={rc.automated_ratio} accent="var(--sec-backlog)" />
+          <div className="metric-row-value">{pct(rc.automated_ratio)} <span className="muted">· {rc.covered_by_automated}/{rc.active_requirements}</span></div>
+        </div>
+        <div className="metric-row" style={{ cursor: "default" }}>
+          <div className="metric-row-label">Requirements covered by a manual test</div>
+          <Bar value={rc.manual_ratio} accent="var(--sec-cycles)" />
+          <div className="metric-row-value">{pct(rc.manual_ratio)} <span className="muted">· {rc.covered_by_manual}/{rc.active_requirements}</span></div>
+        </div>
+      </div>
+      <p className="muted" style={{ fontSize: 12 }}>
+        Phase 1 executes all tests manually; "automated" reflects the test's automation status in the repository.
+      </p>
+    </div>
+  );
+}
+
 function MetricRow({ m, onOpen }: { m: Metric; onOpen: () => void }) {
   const meta = META[m.metric_id];
   return (
@@ -244,6 +285,12 @@ export function DashboardPage() {
   if (releaseId) scopeParams.release_id = releaseId;
   if (cycleId) scopeParams.cycle_id = cycleId;
   const query = new URLSearchParams(scopeParams).toString();
+
+  const coverageType = useList<CoverageByType>(
+    ["coverage-by-type", pid, releaseId, cycleId],
+    `/projects/${pid}/reports/coverage-by-type?${query}`,
+    !!pid,
+  );
 
   const summary = useQuery({
     queryKey: ["summary", pid, releaseId, cycleId],
@@ -330,6 +377,15 @@ export function DashboardPage() {
               ))}
             </div>
           </Card>
+
+          {coverageType.data && (
+            <Card>
+              <h3 className="section-title" style={{ ["--dot" as string]: "var(--sec-backlog)" }}>
+                Manual vs automated coverage
+              </h3>
+              <CoverageTypeCard cbt={coverageType.data} />
+            </Card>
+          )}
 
           <Card>
             <h3 className="section-title" style={{ ["--dot" as string]: META["M-02"].accent }}>

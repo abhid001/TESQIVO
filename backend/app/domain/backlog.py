@@ -229,8 +229,20 @@ async def transition_defect(
     return d
 
 
-async def list_entities(session: AsyncSession, model, project_id: uuid.UUID, page: int, page_size: int):
-    stmt = select(model).where(model.project_id == project_id).order_by(model.key)
+async def list_entities(
+    session: AsyncSession, model, project_id: uuid.UUID, page: int, page_size: int,
+    sort: str | None = None,
+):
+    from app.domain.sorting import apply_sort, natural_key_order
+
+    stmt = select(model).where(model.project_id == project_id)
     total = await session.scalar(select(func.count()).select_from(stmt.subquery())) or 0
+
+    allowed: dict = {"key": natural_key_order(model), "status": [model.status]}
+    for name in ("title", "name", "summary", "priority", "severity", "created_at", "updated_at"):
+        col = getattr(model, name, None)
+        if col is not None:
+            allowed[name] = [func.lower(col)] if name in ("title", "name", "summary") else [col]
+    stmt = apply_sort(stmt, sort=sort, allowed=allowed, default=natural_key_order(model))
     rows = (await session.scalars(stmt.limit(page_size).offset((page - 1) * page_size))).all()
     return list(rows), int(total)

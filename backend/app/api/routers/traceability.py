@@ -99,13 +99,21 @@ async def create_requirement(project_id: str, body: CreateRequirement, actor: Cu
     return _req_out(r)
 
 
+def _page(items: list, page: int, page_size: int, total: int) -> dict:
+    return {
+        "items": items, "page": page, "page_size": page_size, "total": total,
+        "pages": max(1, (total + page_size - 1) // page_size),
+    }
+
+
 @router.get("/projects/{project_id}/requirements")
 async def list_requirements(project_id: str, actor: CurrentActor, db: DbSession,
+                            sort: str | None = None,
                             page: int = Query(1, ge=1), page_size: int = Query(50, ge=1, le=200)) -> dict:
     pid = uuid.UUID(project_id)
     authz.require_member(actor, pid)
-    rows, total = await backlog.list_entities(db, Requirement, pid, page, page_size)
-    return {"items": [_req_out(r) for r in rows], "page": page, "page_size": page_size, "total": total}
+    rows, total = await backlog.list_entities(db, Requirement, pid, page, page_size, sort=sort)
+    return _page([_req_out(r) for r in rows], page, page_size, total)
 
 
 @router.post("/requirements/{req_id}/transitions")
@@ -128,11 +136,12 @@ async def create_release(project_id: str, body: CreateRelease, actor: CurrentAct
 
 @router.get("/projects/{project_id}/releases")
 async def list_releases(project_id: str, actor: CurrentActor, db: DbSession,
+                        sort: str | None = None,
                         page: int = Query(1, ge=1), page_size: int = Query(50, ge=1, le=200)) -> dict:
     pid = uuid.UUID(project_id)
     authz.require_member(actor, pid)
-    rows, total = await backlog.list_entities(db, Release, pid, page, page_size)
-    return {"items": [_rel_out(r) for r in rows], "page": page, "page_size": page_size, "total": total}
+    rows, total = await backlog.list_entities(db, Release, pid, page, page_size, sort=sort)
+    return _page([_rel_out(r) for r in rows], page, page_size, total)
 
 
 @router.get("/releases/{release_id}")
@@ -184,11 +193,12 @@ async def create_defect(project_id: str, body: CreateDefect, actor: CurrentActor
 
 @router.get("/projects/{project_id}/defects")
 async def list_defects(project_id: str, actor: CurrentActor, db: DbSession,
+                       sort: str | None = None,
                        page: int = Query(1, ge=1), page_size: int = Query(50, ge=1, le=200)) -> dict:
     pid = uuid.UUID(project_id)
     authz.require_member(actor, pid)
-    rows, total = await backlog.list_entities(db, Defect, pid, page, page_size)
-    return {"items": [_def_out(d) for d in rows], "page": page, "page_size": page_size, "total": total}
+    rows, total = await backlog.list_entities(db, Defect, pid, page, page_size, sort=sort)
+    return _page([_def_out(d) for d in rows], page, page_size, total)
 
 
 @router.post("/defects/{defect_id}/transitions")

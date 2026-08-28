@@ -170,6 +170,23 @@ export interface Release {
   version: number;
 }
 
+export interface CoverageByType {
+  tests: {
+    automated: number;
+    manual: number;
+    not_applicable: number;
+    total: number;
+    automation_ratio: number | null;
+  };
+  requirement_coverage: {
+    active_requirements: number;
+    covered_by_automated: number;
+    covered_by_manual: number;
+    automated_ratio: number | null;
+    manual_ratio: number | null;
+  };
+}
+
 export interface ReleaseOverviewRow {
   release_id: string;
   release_key: string;
@@ -216,4 +233,5 @@ export interface Paginated<T> {
   page: number;
   page_size: number;
   total: number;
+  pages?: number;
 }

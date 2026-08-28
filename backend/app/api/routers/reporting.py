@@ -37,6 +37,15 @@ async def summary(
     return await reporting.summary(db, actor, scope)
 
 
+@router.get("/projects/{project_id}/reports/coverage-by-type")
+async def coverage_by_type(
+    project_id: str, actor: CurrentActor, db: DbSession,
+    release_id: str | None = None, cycle_id: str | None = None,
+) -> dict:
+    scope = _scope(project_id, release_id, None, cycle_id, None, None)
+    return await reporting.coverage_by_type(db, actor, scope)
+
+
 @router.get("/projects/{project_id}/reports/release-overview")
 async def release_overview(project_id: str, actor: CurrentActor, db: DbSession) -> dict:
     return {"releases": await reporting.release_overview(db, actor, uuid.UUID(project_id))}

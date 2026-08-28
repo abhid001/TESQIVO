@@ -5,29 +5,82 @@ import { http } from "../api/client";
 import { useProject } from "../api/hooks";
 import type { Defect, Paginated, Release, Requirement, TestCase } from "../api/types";
 import { Badge, Dialog, EmptyState, Field, errText, useToast } from "../ui";
+import { Pager, SortHeader, sortBy, type SortState } from "../components/table";
 
-function EntitySection({
+const PAGE = 20;
+
+interface Col<T> {
+  key: string;
+  label: string;
+  sortable?: boolean;
+  value?: (r: T) => unknown;
+  render: (r: T) => ReactNode;
+  className?: string;
+}
+
+function Listing<T extends { id: string }>({
   title,
   accent,
-  empty,
-  children,
+  rows,
+  columns,
+  defaultSort,
 }: {
   title: string;
   accent: string;
-  empty: boolean;
-  children: ReactNode;
+  rows: T[];
+  columns: Col<T>[];
+  defaultSort: string;
 }) {
+  const [sort, setSort] = useState<SortState>({ field: defaultSort, dir: "asc" });
+  const [page, setPage] = useState(1);
+  const col = columns.find((c) => c.key === sort.field) ?? columns[0];
+  const getter = col.value ?? ((r: T) => (r as Record<string, unknown>)[col.key]);
+  const sorted = sortBy(rows, getter, sort.dir);
+  const pageRows = sorted.slice((page - 1) * PAGE, page * PAGE);
+  const pages = Math.max(1, Math.ceil(sorted.length / PAGE));
+
   return (
     <section>
       <h3 className="section-title" style={{ ["--dot" as string]: accent }}>
-        {title}
+        {title} <span className="muted" style={{ fontWeight: 400 }}>({rows.length})</span>
       </h3>
-      {empty ? (
+      {rows.length === 0 ? (
         <EmptyState>Nothing here yet.</EmptyState>
       ) : (
-        <div className="table-wrap">
-          <table>{children}</table>
-        </div>
+        <>
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  {columns.map((c) =>
+                    c.sortable === false ? (
+                      <th key={c.key} className={c.className}>{c.label}</th>
+                    ) : (
+                      <SortHeader
+                        key={c.key}
+                        label={c.label}
+                        field={c.key}
+                        sort={sort}
+                        onSort={(s) => { setSort(s); setPage(1); }}
+                        className={c.className}
+                      />
+                    ),
+                  )}
+                </tr>
+              </thead>
+              <tbody>
+                {pageRows.map((r) => (
+                  <tr key={r.id}>
+                    {columns.map((c) => (
+                      <td key={c.key} className={c.className}>{c.render(r)}</td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <Pager page={page} pages={pages} total={sorted.length} pageSize={PAGE} onPage={setPage} />
+        </>
       )}
     </section>
   );
@@ -43,17 +96,17 @@ export function BacklogPage() {
 
   const reqs = useQuery({
     queryKey: ["reqs", pid],
-    queryFn: () => http.get<Paginated<Requirement>>(`/projects/${pid}/requirements`),
+    queryFn: () => http.get<Paginated<Requirement>>(`/projects/${pid}/requirements?page_size=200`),
     enabled: !!pid,
   });
   const releases = useQuery({
     queryKey: ["releases", pid],
-    queryFn: () => http.get<Paginated<Release>>(`/projects/${pid}/releases`),
+    queryFn: () => http.get<Paginated<Release>>(`/projects/${pid}/releases?page_size=200`),
     enabled: !!pid,
   });
   const defects = useQuery({
     queryKey: ["defects", pid],
-    queryFn: () => http.get<Paginated<Defect>>(`/projects/${pid}/defects`),
+    queryFn: () => http.get<Paginated<Defect>>(`/projects/${pid}/defects?page_size=200`),
     enabled: !!pid,
   });
   const cases = useQuery({
@@ -90,61 +143,49 @@ export function BacklogPage() {
       </div>
 
       <div className="stack">
-        <EntitySection title="Requirements" accent="var(--sec-backlog)" empty={!reqs.data?.items.length}>
-          <thead>
-            <tr>
-              <th className="nowrap">Key</th>
-              <th>Title</th>
-              <th className="nowrap">Status</th>
-              <th className="nowrap">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {reqs.data?.items.map((r) => (
-              <tr key={r.id}>
-                <td className="key">{r.key}</td>
-                <td>{r.title}</td>
-                <td><Badge value={r.status} /></td>
-                <td className="nowrap">
-                  {r.status === "draft" && (
-                    <button className="sm" onClick={() => transition.mutate({ kind: "requirements", id: r.id, version: r.version, to: "active" })}>
-                      Activate
-                    </button>
-                  )}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </EntitySection>
+        <Listing
+          title="Requirements"
+          accent="var(--sec-backlog)"
+          defaultSort="key"
+          rows={reqs.data?.items ?? []}
+          columns={[
+            { key: "key", label: "Key", className: "key nowrap", render: (r: Requirement) => r.key },
+            { key: "title", label: "Title", render: (r: Requirement) => r.title },
+            { key: "priority", label: "Priority", className: "nowrap", render: (r: Requirement) => <Badge value={r.priority} /> },
+            { key: "status", label: "Status", className: "nowrap", render: (r: Requirement) => <Badge value={r.status} /> },
+            {
+              key: "actions", label: "Actions", sortable: false, className: "nowrap",
+              render: (r: Requirement) =>
+                r.status === "draft" ? (
+                  <button className="sm" onClick={() => transition.mutate({ kind: "requirements", id: r.id, version: r.version, to: "active" })}>
+                    Activate
+                  </button>
+                ) : null,
+            },
+          ]}
+        />
 
-        <EntitySection title="Defects" accent="var(--sec-traceability)" empty={!defects.data?.items.length}>
-          <thead>
-            <tr>
-              <th className="nowrap">Key</th>
-              <th>Summary</th>
-              <th className="nowrap">Severity</th>
-              <th className="nowrap">Status</th>
-              <th className="nowrap">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {defects.data?.items.map((d) => (
-              <tr key={d.id}>
-                <td className="key">{d.key}</td>
-                <td>{d.summary}</td>
-                <td><Badge value={d.severity} /></td>
-                <td><Badge value={d.status} /></td>
-                <td className="nowrap">
-                  {d.status === "new" && (
-                    <button className="sm" onClick={() => transition.mutate({ kind: "defects", id: d.id, version: d.version, to: "open" })}>
-                      Open
-                    </button>
-                  )}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </EntitySection>
+        <Listing
+          title="Defects"
+          accent="var(--sec-traceability)"
+          defaultSort="key"
+          rows={defects.data?.items ?? []}
+          columns={[
+            { key: "key", label: "Key", className: "key nowrap", render: (d: Defect) => d.key },
+            { key: "summary", label: "Summary", render: (d: Defect) => d.summary },
+            { key: "severity", label: "Severity", className: "nowrap", render: (d: Defect) => <Badge value={d.severity} /> },
+            { key: "status", label: "Status", className: "nowrap", render: (d: Defect) => <Badge value={d.status} /> },
+            {
+              key: "actions", label: "Actions", sortable: false, className: "nowrap",
+              render: (d: Defect) =>
+                d.status === "new" ? (
+                  <button className="sm" onClick={() => transition.mutate({ kind: "defects", id: d.id, version: d.version, to: "open" })}>
+                    Open
+                  </button>
+                ) : null,
+            },
+          ]}
+        />
       </div>
 
       {dialog && dialog !== "link" && (

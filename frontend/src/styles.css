@@ -291,6 +291,8 @@ code, .key { font-family: var(--mono); }
 
 .mbar { height: 8px; border-radius: 999px; background: var(--surface-3); overflow: hidden; }
 .mbar span { display: block; height: 100%; border-radius: 999px; transition: width 0.4s ease; min-width: 2px; }
+.stack-bar { display: flex; height: 12px; border-radius: 999px; overflow: hidden; background: var(--surface-3); }
+.stack-bar span { display: block; height: 100%; }
 
 .metric-list { display: grid; gap: 0; }
 .metric-row {
@@ -507,6 +509,27 @@ tr.drill-linked:hover { background: color-mix(in srgb, var(--primary) 10%, trans
 .notice { border-radius: var(--radius); padding: 11px 13px; font-size: 13.5px; line-height: 1.5; border: 1px solid var(--border); background: var(--surface-2); }
 .notice.ok { background: var(--success-bg); color: var(--success); border-color: transparent; }
 .notice.info { background: var(--info-bg); color: var(--info); border-color: transparent; }
+.sort-th {
+  all: unset; cursor: pointer; display: inline-flex; align-items: center; gap: 5px;
+  font: inherit; text-transform: inherit; letter-spacing: inherit; color: inherit; width: 100%;
+}
+.sort-th:hover { color: var(--text); }
+.sort-caret { font-size: 9px; opacity: 0.5; }
+.sort-th:hover .sort-caret { opacity: 1; }
+th:has(.sort-th) { padding: 0; }
+th .sort-th { padding: 10px 12px; }
+
+.pager {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  flex-wrap: wrap; margin-top: 12px; font-size: 13px;
+}
+.icon-btn {
+  all: unset; cursor: pointer; padding: 4px 6px; border-radius: var(--radius);
+  display: inline-grid; place-items: center; color: var(--text-dim);
+}
+.icon-btn:hover { background: var(--surface-2); color: var(--text); }
+.icon-btn.danger:hover { color: var(--danger); }
+
 .section-title { display: flex; align-items: center; gap: 9px; font-size: 15px; margin: 4px 0 10px; }
 .section-title::before { content: ""; width: 9px; height: 9px; border-radius: 3px; background: var(--dot, var(--primary)); }
 .toolbar { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; margin-bottom: 16px; }

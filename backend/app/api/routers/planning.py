@@ -6,7 +6,7 @@ import uuid
 
 from fastapi import APIRouter
 from pydantic import BaseModel, Field
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from app.api.deps import CurrentActor, DbSession, RequestCtx
 from app.core.errors import ResourceNotFound
@@ -95,7 +95,7 @@ async def create_plan(project_id: str, body: CreatePlan, actor: CurrentActor, db
 async def list_plans(project_id: str, actor: CurrentActor, db: DbSession) -> list[PlanOut]:
     pid = uuid.UUID(project_id)
     authz.require_member(actor, pid)
-    rows = (await db.scalars(select(TestPlan).where(TestPlan.project_id == pid).order_by(TestPlan.key))).all()
+    rows = (await db.scalars(select(TestPlan).where(TestPlan.project_id == pid).order_by(func.length(TestPlan.key), TestPlan.key))).all()
     return [_plan_out(p) for p in rows]
 
 
@@ -146,7 +146,7 @@ async def list_cycles(
     stmt = select(TestCycle).where(TestCycle.project_id == pid)
     if release_id:
         stmt = stmt.where(TestCycle.release_id == uuid.UUID(release_id))
-    rows = (await db.scalars(stmt.order_by(TestCycle.key))).all()
+    rows = (await db.scalars(stmt.order_by(func.length(TestCycle.key), TestCycle.key))).all()
     return [_cycle_out(c) for c in rows]
 
 
@@ -171,7 +171,7 @@ async def list_cycle_tests(cycle_id: str, actor: CurrentActor, db: DbSession) ->
             select(CycleTest, TestCase.key, TestCase.title)
             .join(TestCase, TestCase.id == CycleTest.test_case_id)
             .where(CycleTest.cycle_id == cycle.id, CycleTest.removed_at.is_(None))
-            .order_by(TestCase.key)
+            .order_by(func.length(TestCase.key), TestCase.key)
         )
     ).all()
     out = []

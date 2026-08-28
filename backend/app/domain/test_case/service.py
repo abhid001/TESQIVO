@@ -431,6 +431,18 @@ async def _next_version_number(session: AsyncSession, tc_id: uuid.UUID) -> int:
     return int(n or 0) + 1
 
 
+_TC_SORT = {
+    "key": None,  # filled below (natural)
+    "title": [func.lower(TestCase.title)],
+    "state": [TestCase.lifecycle_state],
+    "lifecycle_state": [TestCase.lifecycle_state],
+    "automation": [TestCase.automation_status],
+    "automation_status": [TestCase.automation_status],
+    "updated_at": [TestCase.updated_at],
+    "created_at": [TestCase.created_at],
+}
+
+
 async def list_test_cases(
     session: AsyncSession,
     actor: Actor,
@@ -439,9 +451,12 @@ async def list_test_cases(
     folder_id: uuid.UUID | None = None,
     state: str | None = None,
     query: str | None = None,
+    sort: str | None = None,
     page: int = 1,
     page_size: int = 25,
 ) -> tuple[list[TestCase], int]:
+    from app.domain.sorting import apply_sort, natural_key_order
+
     authz.require_member(actor, project_id)
     stmt = select(TestCase).where(TestCase.project_id == project_id)
     if folder_id is not None:
@@ -452,9 +467,9 @@ async def list_test_cases(
         like = f"%{query.lower()}%"
         stmt = stmt.where(func.lower(TestCase.title).like(like) | func.lower(TestCase.key).like(like))
     total = await session.scalar(select(func.count()).select_from(stmt.subquery())) or 0
+    allowed = {**_TC_SORT, "key": natural_key_order(TestCase)}
+    stmt = apply_sort(stmt, sort=sort, allowed=allowed, default=natural_key_order(TestCase))
     rows = (
-        await session.scalars(
-            stmt.order_by(TestCase.key).limit(page_size).offset((page - 1) * page_size)
-        )
+        await session.scalars(stmt.limit(page_size).offset((page - 1) * page_size))
     ).all()
     return list(rows), int(total)

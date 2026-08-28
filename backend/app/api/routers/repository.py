@@ -144,16 +144,18 @@ async def create_test_case(
 async def list_test_cases(
     project_id: str, actor: CurrentActor, db: DbSession,
     folder_id: str | None = None, state: str | None = None, q: str | None = None,
+    sort: str | None = None,
     page: int = Query(1, ge=1), page_size: int = Query(25, ge=1, le=200),
 ) -> dict:
     rows, total = await tc_service.list_test_cases(
         db, actor, project_id=uuid.UUID(project_id),
         folder_id=uuid.UUID(folder_id) if folder_id else None,
-        state=state, query=q, page=page, page_size=page_size,
+        state=state, query=q, sort=sort, page=page, page_size=page_size,
     )
+    pages = max(1, (total + page_size - 1) // page_size)
     return {
         "items": [_tc_out(tc).model_dump() for tc in rows],
-        "page": page, "page_size": page_size, "total": total,
+        "page": page, "page_size": page_size, "total": total, "pages": pages,
         "links": {"self": f"/api/v1/projects/{project_id}/test-cases?page={page}"},
     }
 

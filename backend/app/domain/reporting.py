@@ -410,6 +410,72 @@ async def cycle_breakdown(session: AsyncSession, actor: Actor, scope: Scope) -> 
     return rows
 
 
+async def coverage_by_type(session: AsyncSession, actor: Actor, scope: Scope) -> dict:
+    """Manual vs automated view of the repository and of requirement coverage."""
+    authz.authorize(actor, "report.view", project_id=scope.project_id)
+    tests = list(
+        await session.scalars(
+            select(TestCase).where(
+                TestCase.project_id == scope.project_id,
+                TestCase.lifecycle_state.in_(("approved", "active")),
+            )
+        )
+    )
+    automated = [t for t in tests if t.automation_status == "automated"]
+    manual = [t for t in tests if t.automation_status == "candidate"]
+    not_applicable = [t for t in tests if t.automation_status == "not_applicable"]
+
+    active_reqs = list(
+        await session.scalars(
+            select(Requirement).where(
+                Requirement.project_id == scope.project_id, Requirement.status == "active"
+            )
+        )
+    )
+    tc_by_id = {t.id: t for t in tests}
+    reqs_auto = 0
+    reqs_manual = 0
+    for req in active_reqs:
+        linked = await session.scalars(
+            select(TraceLink.target_id).where(
+                TraceLink.project_id == scope.project_id,
+                TraceLink.removed_at.is_(None),
+                TraceLink.source_type == "requirement",
+                TraceLink.source_id == req.id,
+                TraceLink.target_type == "test_case",
+            )
+        )
+        kinds = {
+            tc_by_id[tid].automation_status
+            for tid in linked
+            if tid in tc_by_id and _tc_qualifies(tc_by_id[tid])
+        }
+        if "automated" in kinds:
+            reqs_auto += 1
+        if "candidate" in kinds:
+            reqs_manual += 1
+
+    eligible = len(automated) + len(manual)
+    return {
+        "scope": scope.as_dict(),
+        "formula_version": FORMULA_VERSION,
+        "tests": {
+            "automated": len(automated),
+            "manual": len(manual),
+            "not_applicable": len(not_applicable),
+            "total": len(tests),
+            "automation_ratio": (len(automated) / eligible) if eligible else None,
+        },
+        "requirement_coverage": {
+            "active_requirements": len(active_reqs),
+            "covered_by_automated": reqs_auto,
+            "covered_by_manual": reqs_manual,
+            "automated_ratio": (reqs_auto / len(active_reqs)) if active_reqs else None,
+            "manual_ratio": (reqs_manual / len(active_reqs)) if active_reqs else None,
+        },
+    }
+
+
 async def release_overview(
     session: AsyncSession, actor: Actor, project_id: uuid.UUID
 ) -> list[dict]:
