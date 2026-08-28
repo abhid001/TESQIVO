@@ -28,6 +28,7 @@ export function PlansPage() {
       qc.invalidateQueries({ queryKey: ["plans"] });
       setCreating(false);
       setName("");
+      toast("Plan created");
     },
     onError: (e) => toast(errText(e), "error"),
   });
@@ -35,7 +36,7 @@ export function PlansPage() {
   const transition = useMutation({
     mutationFn: ({ plan, to }: { plan: Plan; to: string }) =>
       http.post(`/plans/${plan.id}/transitions`, { to, expected_version: plan.version, reason: "via UI" }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["plans"] }),
+    onSuccess: (_d, v) => { qc.invalidateQueries({ queryKey: ["plans"] }); toast(`Plan ${v.to}`); },
     onError: (e) => toast(errText(e), "error"),
   });
 

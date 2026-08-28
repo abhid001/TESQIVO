@@ -27,6 +27,7 @@ from app.models import (
     ExecutionAttempt,
     Release,
     Requirement,
+    Scenario,
     TestCase,
     TestCycle,
     TraceLink,
@@ -128,6 +129,29 @@ def _tc_qualifies(tc: TestCase) -> bool:
     return tc.lifecycle_state in ("approved", "active") and tc.approved_version_id is not None
 
 
+async def _requirement_test_case_ids(
+    session: AsyncSession, project_id: uuid.UUID, req_id: uuid.UUID
+) -> set[uuid.UUID]:
+    """Test cases that cover a requirement: direct ``covers`` trace links OR test
+    cases in an active Scenario under the requirement (Requirement -> Scenario ->
+    Test Case flow)."""
+    direct = await session.scalars(
+        select(TraceLink.target_id).where(
+            TraceLink.project_id == project_id,
+            TraceLink.removed_at.is_(None),
+            TraceLink.source_type == "requirement",
+            TraceLink.source_id == req_id,
+            TraceLink.target_type == "test_case",
+        )
+    )
+    via_scenario = await session.scalars(
+        select(TestCase.id)
+        .join(Scenario, Scenario.id == TestCase.scenario_id)
+        .where(Scenario.requirement_id == req_id, Scenario.status == "active")
+    )
+    return set(direct) | set(via_scenario)
+
+
 async def compute_all(session: AsyncSession, actor: Actor, scope: Scope) -> list[Metric]:
     authz.authorize(actor, "report.view", project_id=scope.project_id)
     now = datetime.now(UTC)
@@ -151,19 +175,10 @@ async def compute_all(session: AsyncSession, actor: Actor, scope: Scope) -> list
         if ct.test_case_id not in tc_cache:
             tc_cache[ct.test_case_id] = await session.get(TestCase, ct.test_case_id)
 
-    # active Requirement -> covered logical test case ids (active 'covers' links)
+    # active Requirement -> covered logical test case ids (direct links + scenarios)
     req_to_tcs: dict[uuid.UUID, set[uuid.UUID]] = {}
     for req in active_reqs:
-        links = await session.scalars(
-            select(TraceLink).where(
-                TraceLink.project_id == scope.project_id,
-                TraceLink.removed_at.is_(None),
-                TraceLink.source_type == "requirement",
-                TraceLink.source_id == req.id,
-                TraceLink.target_type == "test_case",
-            )
-        )
-        req_to_tcs[req.id] = {l.target_id for l in links}
+        req_to_tcs[req.id] = await _requirement_test_case_ids(session, scope.project_id, req.id)
 
     async def _tc(tc_id: uuid.UUID) -> TestCase | None:
         if tc_id not in tc_cache:
@@ -436,15 +451,7 @@ async def coverage_by_type(session: AsyncSession, actor: Actor, scope: Scope) ->
     reqs_auto = 0
     reqs_manual = 0
     for req in active_reqs:
-        linked = await session.scalars(
-            select(TraceLink.target_id).where(
-                TraceLink.project_id == scope.project_id,
-                TraceLink.removed_at.is_(None),
-                TraceLink.source_type == "requirement",
-                TraceLink.source_id == req.id,
-                TraceLink.target_type == "test_case",
-            )
-        )
+        linked = await _requirement_test_case_ids(session, scope.project_id, req.id)
         kinds = {
             tc_by_id[tid].automation_status
             for tid in linked
@@ -597,16 +604,7 @@ async def drill_down(
     )
     req_to_tcs: dict[uuid.UUID, set[uuid.UUID]] = {}
     for req in active_reqs:
-        links = await session.scalars(
-            select(TraceLink).where(
-                TraceLink.project_id == scope.project_id,
-                TraceLink.removed_at.is_(None),
-                TraceLink.source_type == "requirement",
-                TraceLink.source_id == req.id,
-                TraceLink.target_type == "test_case",
-            )
-        )
-        req_to_tcs[req.id] = {l.target_id for l in links}
+        req_to_tcs[req.id] = await _requirement_test_case_ids(session, scope.project_id, req.id)
     for ids in req_to_tcs.values():
         for tc_id in ids:
             if tc_id not in tc_by_id:

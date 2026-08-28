@@ -123,7 +123,7 @@ export function BacklogPage() {
   const transition = useMutation({
     mutationFn: ({ kind, id, version, to }: { kind: string; id: string; version: number; to: string }) =>
       http.post(`/${kind}/${id}/transitions`, { to, expected_version: version }),
-    onSuccess: invalidateAll,
+    onSuccess: (_d, v) => { invalidateAll(); toast(`Status changed to ${v.to}`); },
     onError: (e) => toast(errText(e), "error"),
   });
 
@@ -246,7 +246,7 @@ function CreateDialog({
         severity: f.severity,
         release_id: f.release_id || null,
       }),
-    onSuccess: onDone,
+    onSuccess: () => { toast(`${kind[0].toUpperCase()}${kind.slice(1)} created`); onDone(); },
     onError: (e) => toast(errText(e), "error"),
   });
   return (

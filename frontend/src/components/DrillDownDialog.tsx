@@ -59,7 +59,7 @@ export function DrillDownDialog({
     if (!link) return;
     if (link.kind === "test_case") {
       onClose();
-      nav(`/p/${projectKey}/repository/${link.id}`);
+      nav(`/p/${projectKey}/tests/${link.id}`);
     }
   };
 

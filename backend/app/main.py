@@ -12,6 +12,7 @@ from app.api.routers import planning as planning_router
 from app.api.routers import projects as projects_router
 from app.api.routers import reporting as reporting_router
 from app.api.routers import repository as repository_router
+from app.api.routers import scenarios as scenarios_router
 from app.api.routers import system as system_router
 from app.api.routers import traceability as traceability_router
 from app.api.routers import users as users_router
@@ -37,6 +38,7 @@ def create_app() -> FastAPI:
         users_router.router,
         projects_router.router,
         repository_router.router,
+        scenarios_router.router,
         planning_router.router,
         execution_router.router,
         traceability_router.router,

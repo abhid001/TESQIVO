@@ -3,7 +3,7 @@ import { Link, useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { http } from "../api/client";
 import { useProject } from "../api/hooks";
-import type { Paginated, TestCase, Version } from "../api/types";
+import type { Paginated, Scenario, TestCase, Version } from "../api/types";
 import { Badge, Dialog, EmptyState, Field, errText, useToast } from "../ui";
 import { StepEditor, type DraftStep } from "../components/StepEditor";
 import { Pager, SortHeader, type SortState } from "../components/table";
@@ -20,21 +20,30 @@ export function RepositoryPage() {
   const toast = useToast();
   const [q, setQ] = useState("");
   const [state, setState] = useState("");
+  const [scenarioId, setScenarioId] = useState("");
   const [page, setPage] = useState(1);
   const [sort, setSort] = useState<SortState>({ field: "key", dir: "asc" });
   const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState<TestCase | null>(null);
   const [confirm, setConfirm] = useState<{ tc: TestCase; action: "archive" | "restore" } | null>(null);
 
+  const scenarios = useQuery({
+    queryKey: ["scenarios", pid, ""],
+    queryFn: () => http.get<{ items: Scenario[] }>(`/projects/${pid}/scenarios`),
+    enabled: !!pid,
+  });
+  const scnById = Object.fromEntries((scenarios.data?.items ?? []).map((s) => [s.id, s]));
+
   const sortParam = `${sort.dir === "desc" ? "-" : ""}${sort.field}`;
   const list = useQuery({
-    queryKey: ["testcases", pid, q, state, page, sortParam],
+    queryKey: ["testcases", pid, q, state, scenarioId, page, sortParam],
     queryFn: () =>
       http.get<Paginated<TestCase>>(
         `/projects/${pid}/test-cases?` +
           new URLSearchParams({
             ...(q ? { q } : {}),
             ...(state ? { state } : {}),
+            ...(scenarioId === "none" ? { unassigned: "true" } : scenarioId ? { scenario_id: scenarioId } : {}),
             sort: sortParam,
             page: String(page),
             page_size: String(PAGE_SIZE),
@@ -45,9 +54,10 @@ export function RepositoryPage() {
 
   const invalidate = () => qc.invalidateQueries({ queryKey: ["testcases"] });
 
-  const [form, setForm] = useState<{ title: string; description: string; steps: DraftStep[] }>({
+  const [form, setForm] = useState<{ title: string; description: string; scenario_id: string; steps: DraftStep[] }>({
     title: "",
     description: "",
+    scenario_id: "",
     steps: [{ action: "", expected_result: "", is_required: true }],
   });
 
@@ -56,12 +66,14 @@ export function RepositoryPage() {
       http.post(`/projects/${pid}/test-cases`, {
         title: form.title,
         description: form.description,
+        scenario_id: form.scenario_id || null,
         steps: form.steps.filter((s) => s.action && s.expected_result),
       }),
     onSuccess: () => {
       invalidate();
+      qc.invalidateQueries({ queryKey: ["scenarios"] });
       setCreating(false);
-      setForm({ title: "", description: "", steps: [{ action: "", expected_result: "", is_required: true }] });
+      setForm({ title: "", description: "", scenario_id: "", steps: [{ action: "", expected_result: "", is_required: true }] });
       toast("Test case created");
     },
     onError: (e) => toast(errText(e), "error"),
@@ -70,10 +82,10 @@ export function RepositoryPage() {
   const lifecycle = useMutation({
     mutationFn: ({ tc, to }: { tc: TestCase; to: string }) =>
       http.post(`/test-cases/${tc.id}/lifecycle-transitions`, { to, expected_version: tc.version }),
-    onSuccess: () => {
+    onSuccess: (_d, v) => {
       invalidate();
       setConfirm(null);
-      toast("Updated");
+      toast(v.to === "archived" ? "Test case archived" : v.to === "draft" ? "Test case restored" : "Test case updated");
     },
     onError: (e) => toast(errText(e), "error"),
   });
@@ -107,6 +119,13 @@ export function RepositoryPage() {
             <option key={s}>{s}</option>
           ))}
         </select>
+        <select value={scenarioId} onChange={(e) => { setScenarioId(e.target.value); setPage(1); }}>
+          <option value="">Any scenario</option>
+          <option value="none">— no scenario —</option>
+          {scenarios.data?.items.map((s) => (
+            <option key={s.id} value={s.id}>{s.key} · {s.title}</option>
+          ))}
+        </select>
       </div>
 
       {list.isLoading ? (
@@ -119,8 +138,8 @@ export function RepositoryPage() {
                 <tr>
                   <SortHeader label="Key" field="key" sort={sort} onSort={onSort} className="nowrap" />
                   <SortHeader label="Title" field="title" sort={sort} onSort={onSort} />
+                  <th className="nowrap">Scenario</th>
                   <SortHeader label="State" field="state" sort={sort} onSort={onSort} className="nowrap" />
-                  <th className="nowrap">Draft changes</th>
                   <SortHeader label="Automation" field="automation" sort={sort} onSort={onSort} className="nowrap" />
                   <th className="nowrap">Actions</th>
                 </tr>
@@ -129,13 +148,20 @@ export function RepositoryPage() {
                 {data.items.map((tc) => (
                   <tr key={tc.id}>
                     <td className="key">
-                      <Link to={`/p/${projectKey}/repository/${tc.id}`}>{tc.key}</Link>
+                      <Link to={`/p/${projectKey}/tests/${tc.id}`}>{tc.key}</Link>
                     </td>
-                    <td>{tc.title}</td>
+                    <td>
+                      {tc.title}
+                      {tc.has_draft_changes && <span className="stale"> · draft pending</span>}
+                    </td>
+                    <td className="nowrap">
+                      {tc.scenario_id && scnById[tc.scenario_id]
+                        ? <span className="key">{scnById[tc.scenario_id].key}</span>
+                        : <span className="muted">—</span>}
+                    </td>
                     <td>
                       <Badge value={tc.lifecycle_state} />
                     </td>
-                    <td>{tc.has_draft_changes ? "pending review" : "—"}</td>
                     <td>{tc.automation_status}</td>
                     <td className="nowrap">
                       <div className="inline-actions">
@@ -190,6 +216,14 @@ export function RepositoryPage() {
               value={form.description}
               onChange={(e) => setForm({ ...form, description: e.target.value })}
             />
+          </Field>
+          <Field label="Scenario (optional)">
+            <select value={form.scenario_id} onChange={(e) => setForm({ ...form, scenario_id: e.target.value })}>
+              <option value="">— none —</option>
+              {scenarios.data?.items.filter((s) => s.status === "active").map((s) => (
+                <option key={s.id} value={s.id}>{s.key} · {s.title}</option>
+              ))}
+            </select>
           </Field>
           <StepEditor steps={form.steps} onChange={(steps) => setForm({ ...form, steps })} />
           <button

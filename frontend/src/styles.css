@@ -34,6 +34,7 @@
   --sec-repository: #0ea5e9;
   --sec-plans: #10b981;
   --sec-cycles: #f59e0b;
+  --sec-scenarios: #7c3aed;
   --sec-releases: #0d9488;
   --sec-traceability: #ec4899;
   --sec-backlog: #8b5cf6;
@@ -197,6 +198,7 @@ code, .key { font-family: var(--mono); }
 .section-repository { --section-accent: var(--sec-repository); }
 .section-plans { --section-accent: var(--sec-plans); }
 .section-cycles { --section-accent: var(--sec-cycles); }
+.section-scenarios { --section-accent: var(--sec-scenarios); }
 .section-releases { --section-accent: var(--sec-releases); }
 .section-settings { --section-accent: var(--sec-releases); }
 .section-traceability { --section-accent: var(--sec-traceability); }

@@ -37,6 +37,7 @@ export function CyclesPage() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["cycles"] });
       setCreating(false);
+      toast("Cycle created");
     },
     onError: (e) => toast(errText(e), "error"),
   });

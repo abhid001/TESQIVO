@@ -175,6 +175,7 @@ class TestCase(UUIDMixin, TimestampMixin, Base):
     project_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("project.id"), nullable=False, index=True)
     key: Mapped[str] = mapped_column(String(32), unique=True, nullable=False)
     folder_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("test_folder.id"), index=True)
+    scenario_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("scenario.id"), index=True)
     title: Mapped[str] = mapped_column(String(300), nullable=False)
     lifecycle_state: Mapped[str] = mapped_column(String(20), default="draft", nullable=False)
     current_version_id: Mapped[uuid.UUID | None] = mapped_column(
@@ -287,6 +288,27 @@ class Requirement(UUIDMixin, TimestampMixin, Base):
         CheckConstraint(
             "status in ('draft','active','fulfilled','archived')", name="req_status_valid"
         ),
+    )
+
+
+class Scenario(UUIDMixin, TimestampMixin, Base):
+    """A named test scenario. The Requirement -> Scenario -> Test Case flow: a
+    scenario groups the test cases that exercise one requirement."""
+
+    __tablename__ = "scenario"
+
+    project_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("project.id"), nullable=False, index=True)
+    key: Mapped[str] = mapped_column(String(32), unique=True, nullable=False)
+    requirement_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("requirement.id"), index=True)
+    title: Mapped[str] = mapped_column(String(300), nullable=False)
+    description: Mapped[str | None] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(String(16), default="active", nullable=False)
+    owner_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("app_user.id"))
+    created_by: Mapped[uuid.UUID] = mapped_column(ForeignKey("app_user.id"), nullable=False)
+    version: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+
+    __table_args__ = (
+        CheckConstraint("status in ('active','archived')", name="scenario_status_valid"),
     )
 
 

@@ -102,6 +102,7 @@ async def create_test_case(
     description: str | None = None,
     preconditions: str | None = None,
     folder_id: uuid.UUID | None = None,
+    scenario_id: uuid.UUID | None = None,
     steps: list[StepInput] | None = None,
     automation_status: str = "candidate",
 ) -> TestCase:
@@ -113,12 +114,19 @@ async def create_test_case(
         folder = await session.get(TestFolder, folder_id)
         if folder is None or folder.project_id != project_id:
             raise ValidationFailed("Folder not found in this project.")
+    if scenario_id is not None:
+        from app.models import Scenario
+
+        sc = await session.get(Scenario, scenario_id)
+        if sc is None or sc.project_id != project_id:
+            raise ValidationFailed("Scenario not found in this project.")
 
     key = await next_key(session, project_id, "test_case")
     tc = TestCase(
         project_id=project_id,
         key=key,
         folder_id=folder_id,
+        scenario_id=scenario_id,
         title=title.strip(),
         lifecycle_state="draft",
         automation_status=automation_status,
@@ -449,6 +457,8 @@ async def list_test_cases(
     *,
     project_id: uuid.UUID,
     folder_id: uuid.UUID | None = None,
+    scenario_id: uuid.UUID | None = None,
+    unassigned: bool = False,
     state: str | None = None,
     query: str | None = None,
     sort: str | None = None,
@@ -461,6 +471,10 @@ async def list_test_cases(
     stmt = select(TestCase).where(TestCase.project_id == project_id)
     if folder_id is not None:
         stmt = stmt.where(TestCase.folder_id == folder_id)
+    if scenario_id is not None:
+        stmt = stmt.where(TestCase.scenario_id == scenario_id)
+    if unassigned:
+        stmt = stmt.where(TestCase.scenario_id.is_(None))
     if state:
         stmt = stmt.where(TestCase.lifecycle_state == state)
     if query:

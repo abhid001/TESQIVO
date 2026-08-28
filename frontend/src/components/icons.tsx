@@ -55,6 +55,13 @@ export const Icons = {
       <path d="M8 15h8M8 18h5" />
     </>,
   ),
+  scenarios: wrap(
+    <>
+      <path d="M4 5h10M4 12h16M4 19h12" />
+      <circle cx="18" cy="5" r="2" />
+      <circle cx="20" cy="19" r="2" />
+    </>,
+  ),
   settings: wrap(
     <>
       <circle cx="12" cy="12" r="3" />

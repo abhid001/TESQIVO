@@ -39,11 +39,23 @@ export interface Step {
   is_required: boolean;
 }
 
+export interface Scenario {
+  id: string;
+  key: string;
+  title: string;
+  description: string | null;
+  status: string;
+  requirement_id: string | null;
+  test_count: number;
+  version: number;
+}
+
 export interface TestCase {
   id: string;
   key: string;
   project_id: string;
   folder_id: string | null;
+  scenario_id: string | null;
   title: string;
   lifecycle_state: string;
   current_version_id: string | null;

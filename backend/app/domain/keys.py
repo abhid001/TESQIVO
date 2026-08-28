@@ -15,6 +15,7 @@ from app.models import EntityCounter, Project
 
 ENTITY_ABBR = {
     "test_case": "TC",
+    "scenario": "SCN",
     "requirement": "REQ",
     "release": "REL",
     "defect": "DEF",

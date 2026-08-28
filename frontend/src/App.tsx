@@ -20,6 +20,7 @@ import { AdminConsole } from "./pages/admin/AdminConsole";
 import { ProjectSettingsPage } from "./pages/ProjectSettingsPage";
 import { DashboardPage } from "./pages/DashboardPage";
 import { RepositoryPage } from "./pages/RepositoryPage";
+import { ScenariosPage } from "./pages/ScenariosPage";
 import { TestCasePage } from "./pages/TestCasePage";
 import { PlansPage } from "./pages/PlansPage";
 import { CyclesPage } from "./pages/CyclesPage";
@@ -30,7 +31,8 @@ import { ReleasesPage } from "./pages/ReleasesPage";
 
 const TABS = [
   { to: "dashboard", label: "Dashboard", section: "dashboard", accent: "var(--sec-dashboard)", icon: Icons.dashboard },
-  { to: "repository", label: "Repository", section: "repository", accent: "var(--sec-repository)", icon: Icons.repository },
+  { to: "tests", label: "Tests", section: "tests", accent: "var(--sec-repository)", icon: Icons.repository },
+  { to: "scenarios", label: "Scenarios", section: "scenarios", accent: "var(--sec-scenarios)", icon: Icons.scenarios },
   { to: "plans", label: "Plans", section: "plans", accent: "var(--sec-plans)", icon: Icons.plans },
   { to: "cycles", label: "Cycles", section: "cycles", accent: "var(--sec-cycles)", icon: Icons.cycles },
   { to: "releases", label: "Releases", section: "releases", accent: "var(--sec-releases)", icon: Icons.releases },
@@ -110,8 +112,10 @@ function Shell() {
       <main className={`main section-${current.section}`}>
         <Routes>
           <Route path="dashboard" element={<DashboardPage />} />
-          <Route path="repository" element={<RepositoryPage />} />
-          <Route path="repository/:testCaseId" element={<TestCasePage />} />
+          <Route path="tests" element={<RepositoryPage />} />
+          <Route path="tests/:testCaseId" element={<TestCasePage />} />
+          <Route path="scenarios" element={<ScenariosPage />} />
+          <Route path="repository" element={<Navigate to="../tests" replace />} />
           <Route path="plans" element={<PlansPage />} />
           <Route path="cycles" element={<CyclesPage />} />
           <Route path="cycles/:cycleId/run" element={<CycleRunnerPage />} />
