@@ -3,7 +3,15 @@ import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { http } from "../api/client";
 import { useProject, useList } from "../api/hooks";
-import type { Cycle, CycleBreakdownRow, Metric, ReportSummary } from "../api/types";
+import type {
+  Cycle,
+  CycleBreakdownRow,
+  Metric,
+  Paginated,
+  Release,
+  ReleaseOverviewRow,
+  ReportSummary,
+} from "../api/types";
 import { Badge, Card, EmptyState } from "../ui";
 import { DrillDownDialog } from "../components/DrillDownDialog";
 
@@ -122,6 +130,62 @@ function CycleBreakdown({
   );
 }
 
+function ReleaseRollup({
+  rows,
+  activeReleaseId,
+  onPickRelease,
+  onOpenCycles,
+}: {
+  rows: ReleaseOverviewRow[];
+  activeReleaseId: string;
+  onPickRelease: (id: string) => void;
+  onOpenCycles: () => void;
+}) {
+  if (rows.length === 0) {
+    return <p className="muted">No releases yet. Create one in the Releases tab to track release-wise execution.</p>;
+  }
+  return (
+    <div className="stack">
+      {rows.map((r) => (
+        <div key={r.release_id} className={`release-rollup ${activeReleaseId === r.release_id ? "on" : ""}`}>
+          <button className="release-head" onClick={() => onPickRelease(activeReleaseId === r.release_id ? "" : r.release_id)}>
+            <span className="key">{r.release_key}</span>
+            <span className="release-name">{r.name}</span>
+            {r.version_label && <span className="mtag">{r.version_label}</span>}
+            <Badge value={r.status} />
+            <span className="muted">{r.cycle_count} cycles · {r.requirements} requirements</span>
+            {r.open_critical_defects > 0 && (
+              <span className="badge FAILED">{r.open_critical_defects} open critical</span>
+            )}
+            <span className="drill-hint" style={{ marginLeft: "auto" }}>
+              {activeReleaseId === r.release_id ? "scoped ✓" : "scope to this"}
+            </span>
+          </button>
+          <div className="cycle-row-metrics" style={{ marginTop: 8 }}>
+            <div>
+              <div className="cm-label">Completion</div>
+              <Bar value={r.completion} accent="var(--sec-repository)" />
+              <div className="cm-value">{pct(r.completion)} · {r.terminal}/{r.scoped_tests}</div>
+            </div>
+            <div>
+              <div className="cm-label">Pass rate</div>
+              <Bar value={r.pass_rate} accent={(r.pass_rate ?? 0) >= 0.8 ? "var(--success)" : "var(--sec-cycles)"} />
+              <div className="cm-value">{pct(r.pass_rate)}</div>
+            </div>
+            <div className="cm-counts">
+              {r.cycles.slice(0, 6).map((c) => (
+                <button key={c.cycle_id} className="badge" onClick={onOpenCycles} title={`${c.name} — ${pct(c.completion)} complete`}>
+                  {c.cycle_key} {pct(c.completion)}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function MetricRow({ m, onOpen }: { m: Metric; onOpen: () => void }) {
   const meta = META[m.metric_id];
   return (
@@ -156,18 +220,38 @@ export function DashboardPage() {
   const { project } = useProject(projectKey);
   const pid = project?.id;
   const nav = useNavigate();
+  const [releaseId, setReleaseId] = useState("");
   const [cycleId, setCycleId] = useState("");
   const [openMetric, setOpenMetric] = useState<string | null>(null);
 
-  const cycles = useList<Cycle[]>(["cycles", pid], `/projects/${pid}/cycles`, !!pid);
-  const query = new URLSearchParams(cycleId ? { cycle_id: cycleId } : {}).toString();
+  const releases = useList<Paginated<Release>>(
+    ["releases", pid],
+    `/projects/${pid}/releases?page_size=200`,
+    !!pid,
+  );
+  const cycles = useList<Cycle[]>(
+    ["cycles", pid, releaseId],
+    `/projects/${pid}/cycles${releaseId ? `?release_id=${releaseId}` : ""}`,
+    !!pid,
+  );
+  const releaseOverview = useList<{ releases: ReleaseOverviewRow[] }>(
+    ["release-overview", pid],
+    `/projects/${pid}/reports/release-overview`,
+    !!pid,
+  );
+
+  const scopeParams: Record<string, string> = {};
+  if (releaseId) scopeParams.release_id = releaseId;
+  if (cycleId) scopeParams.cycle_id = cycleId;
+  const query = new URLSearchParams(scopeParams).toString();
+
   const summary = useQuery({
-    queryKey: ["summary", pid, cycleId],
+    queryKey: ["summary", pid, releaseId, cycleId],
     queryFn: () => http.get<ReportSummary>(`/projects/${pid}/reports/summary?${query}`),
     enabled: !!pid,
   });
   const breakdown = useQuery({
-    queryKey: ["cycle-breakdown", pid, cycleId],
+    queryKey: ["cycle-breakdown", pid, releaseId, cycleId],
     queryFn: () =>
       http.get<{ cycles: CycleBreakdownRow[] }>(`/projects/${pid}/reports/cycle-breakdown?${query}`),
     enabled: !!pid,
@@ -175,14 +259,26 @@ export function DashboardPage() {
 
   if (!project) return <p>Loading project…</p>;
   const byId = Object.fromEntries((summary.data?.metrics ?? []).map((m) => [m.metric_id, m]));
+  const relRows = releaseOverview.data?.releases ?? [];
 
   return (
     <>
       <div className="page-header">
         <h2>Dashboard</h2>
         <div className="inline-actions">
-          <select value={cycleId} onChange={(e) => setCycleId(e.target.value)} style={{ width: "auto" }}>
-            <option value="">Whole project</option>
+          <select
+            value={releaseId}
+            onChange={(e) => { setReleaseId(e.target.value); setCycleId(""); }}
+            style={{ width: "auto" }}
+            aria-label="Release scope"
+          >
+            <option value="">All releases</option>
+            {releases.data?.items.map((r) => (
+              <option key={r.id} value={r.id}>Release: {r.key} · {r.name}</option>
+            ))}
+          </select>
+          <select value={cycleId} onChange={(e) => setCycleId(e.target.value)} style={{ width: "auto" }} aria-label="Cycle scope">
+            <option value="">{releaseId ? "All cycles in release" : "All cycles"}</option>
             {cycles.data?.map((c) => (
               <option key={c.id} value={c.id}>
                 {c.key} · {c.name} ({c.environment}/{c.build})
@@ -211,6 +307,18 @@ export function DashboardPage() {
             {byId["M-03"] && <Headline m={byId["M-03"]} onOpen={() => setOpenMetric("M-03")} />}
             {byId["M-10"] && <Headline m={byId["M-10"]} onOpen={() => setOpenMetric("M-10")} invert />}
           </div>
+
+          <Card>
+            <h3 className="section-title" style={{ ["--dot" as string]: "var(--sec-releases)" }}>
+              Releases
+            </h3>
+            <ReleaseRollup
+              rows={relRows}
+              activeReleaseId={releaseId}
+              onPickRelease={(id) => { setReleaseId(id); setCycleId(""); }}
+              onOpenCycles={() => nav(`/p/${projectKey}/cycles`)}
+            />
+          </Card>
 
           <Card>
             <h3 className="section-title" style={{ ["--dot" as string]: META["M-05"].accent }}>

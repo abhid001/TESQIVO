@@ -34,6 +34,7 @@
   --sec-repository: #0ea5e9;
   --sec-plans: #10b981;
   --sec-cycles: #f59e0b;
+  --sec-releases: #0d9488;
   --sec-traceability: #ec4899;
   --sec-backlog: #8b5cf6;
 }
@@ -196,6 +197,7 @@ code, .key { font-family: var(--mono); }
 .section-repository { --section-accent: var(--sec-repository); }
 .section-plans { --section-accent: var(--sec-plans); }
 .section-cycles { --section-accent: var(--sec-cycles); }
+.section-releases { --section-accent: var(--sec-releases); }
 .section-traceability { --section-accent: var(--sec-traceability); }
 .section-backlog { --section-accent: var(--sec-backlog); }
 
@@ -264,6 +266,28 @@ code, .key { font-family: var(--mono); }
 @media (max-width: 640px) {
   .cycle-row-metrics { grid-template-columns: 1fr; }
 }
+
+.release-card { display: grid; gap: 12px; }
+.release-head {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  width: 100%; border: none; background: transparent; padding: 0;
+  text-align: left; font-weight: 400; cursor: pointer; white-space: normal;
+  justify-content: normal;
+}
+.release-head:hover .drill-hint { opacity: 1; color: var(--primary); }
+.release-name { font-weight: 700; font-size: 15px; }
+.release-progress {
+  display: grid; grid-template-columns: 1fr 1fr auto; gap: 18px;
+  padding: 12px; border-radius: var(--radius); background: var(--surface-2);
+}
+.release-progress .mbar { margin: 4px 0; }
+.release-detail { border-top: 1px solid var(--border); padding-top: 12px; }
+@media (max-width: 700px) { .release-progress { grid-template-columns: 1fr; } }
+
+.release-rollup { padding: 12px; border: 1px solid var(--border); border-radius: var(--radius); }
+.release-rollup.on { border-color: var(--sec-releases); box-shadow: 0 0 0 1px var(--sec-releases) inset; }
+.release-rollup .cm-counts .badge { cursor: pointer; }
+.release-rollup .cm-counts .badge:hover { background: var(--surface-3); }
 
 .mbar { height: 8px; border-radius: 999px; background: var(--surface-3); overflow: hidden; }
 .mbar span { display: block; height: 100%; border-radius: 999px; transition: width 0.4s ease; min-width: 2px; }

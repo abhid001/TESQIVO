@@ -163,8 +163,32 @@ export interface Release {
   key: string;
   name: string;
   status: string;
+  description: string | null;
   version_label: string | null;
+  start_date: string | null;
+  end_date: string | null;
   version: number;
+}
+
+export interface ReleaseOverviewRow {
+  release_id: string;
+  release_key: string;
+  name: string;
+  status: string;
+  version_label: string | null;
+  start_date: string | null;
+  end_date: string | null;
+  cycle_count: number;
+  cycles: CycleBreakdownRow[];
+  scoped_tests: number;
+  terminal: number;
+  passed: number;
+  failed: number;
+  blocked: number;
+  completion: number | null;
+  pass_rate: number | null;
+  requirements: number;
+  open_critical_defects: number;
 }
 
 export interface Defect {

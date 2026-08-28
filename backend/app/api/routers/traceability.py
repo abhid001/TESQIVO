@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import uuid
+from datetime import datetime
 
 from fastapi import APIRouter, Query
 from pydantic import BaseModel, Field
@@ -28,6 +29,19 @@ class CreateRelease(BaseModel):
     name: str = Field(min_length=1, max_length=200)
     description: str | None = None
     version_label: str | None = None
+    start_date: datetime | None = None
+    end_date: datetime | None = None
+
+
+class UpdateRelease(BaseModel):
+    expected_version: int
+    name: str | None = None
+    description: str | None = None
+    version_label: str | None = None
+    start_date: datetime | None = None
+    end_date: datetime | None = None
+    clear_start_date: bool = False
+    clear_end_date: bool = False
 
 
 class CreateDefect(BaseModel):
@@ -63,7 +77,10 @@ def _req_out(r: Requirement) -> dict:
 
 def _rel_out(r: Release) -> dict:
     return {"id": str(r.id), "key": r.key, "name": r.name, "status": r.status,
-            "version_label": r.version_label, "version": r.version}
+            "description": r.description, "version_label": r.version_label,
+            "start_date": r.start_date.isoformat() if r.start_date else None,
+            "end_date": r.end_date.isoformat() if r.end_date else None,
+            "version": r.version}
 
 
 def _def_out(d: Defect) -> dict:
@@ -104,6 +121,7 @@ async def create_release(project_id: str, body: CreateRelease, actor: CurrentAct
     r = await backlog.create_release(
         db, actor, ctx, project_id=uuid.UUID(project_id), name=body.name,
         description=body.description, version_label=body.version_label,
+        start_date=body.start_date, end_date=body.end_date,
     )
     return _rel_out(r)
 
@@ -115,6 +133,35 @@ async def list_releases(project_id: str, actor: CurrentActor, db: DbSession,
     authz.require_member(actor, pid)
     rows, total = await backlog.list_entities(db, Release, pid, page, page_size)
     return {"items": [_rel_out(r) for r in rows], "page": page, "page_size": page_size, "total": total}
+
+
+@router.get("/releases/{release_id}")
+async def get_release(release_id: str, actor: CurrentActor, db: DbSession) -> dict:
+    r = await db.get(Release, uuid.UUID(release_id))
+    from app.core.errors import ResourceNotFound
+
+    if r is None:
+        raise ResourceNotFound("Release not found.")
+    authz.require_member(actor, r.project_id)
+    return _rel_out(r)
+
+
+@router.patch("/releases/{release_id}")
+async def update_release(release_id: str, body: UpdateRelease, actor: CurrentActor, db: DbSession, ctx: RequestCtx) -> dict:
+    kwargs: dict = dict(
+        release_id=uuid.UUID(release_id), expected_version=body.expected_version,
+        name=body.name, description=body.description, version_label=body.version_label,
+    )
+    if body.clear_start_date:
+        kwargs["start_date"] = None
+    elif body.start_date is not None:
+        kwargs["start_date"] = body.start_date
+    if body.clear_end_date:
+        kwargs["end_date"] = None
+    elif body.end_date is not None:
+        kwargs["end_date"] = body.end_date
+    r = await backlog.update_release(db, actor, ctx, **kwargs)
+    return _rel_out(r)
 
 
 @router.post("/releases/{release_id}/transitions")

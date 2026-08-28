@@ -138,10 +138,15 @@ async def create_cycle(plan_id: str, body: CreateCycle, actor: CurrentActor, db:
 
 
 @router.get("/projects/{project_id}/cycles", response_model=list[CycleOut])
-async def list_cycles(project_id: str, actor: CurrentActor, db: DbSession) -> list[CycleOut]:
+async def list_cycles(
+    project_id: str, actor: CurrentActor, db: DbSession, release_id: str | None = None
+) -> list[CycleOut]:
     pid = uuid.UUID(project_id)
     authz.require_member(actor, pid)
-    rows = (await db.scalars(select(TestCycle).where(TestCycle.project_id == pid).order_by(TestCycle.key))).all()
+    stmt = select(TestCycle).where(TestCycle.project_id == pid)
+    if release_id:
+        stmt = stmt.where(TestCycle.release_id == uuid.UUID(release_id))
+    rows = (await db.scalars(stmt.order_by(TestCycle.key))).all()
     return [_cycle_out(c) for c in rows]
 
 

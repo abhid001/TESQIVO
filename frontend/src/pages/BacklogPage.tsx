@@ -39,7 +39,7 @@ export function BacklogPage() {
   const pid = project?.id;
   const qc = useQueryClient();
   const toast = useToast();
-  const [dialog, setDialog] = useState<null | "requirement" | "release" | "defect" | "link">(null);
+  const [dialog, setDialog] = useState<null | "requirement" | "defect" | "link">(null);
 
   const reqs = useQuery({
     queryKey: ["reqs", pid],
@@ -82,7 +82,6 @@ export function BacklogPage() {
         <h2>Requirements &amp; Defects</h2>
         <div className="inline-actions">
           <button onClick={() => setDialog("requirement")}>New requirement</button>
-          <button onClick={() => setDialog("release")}>New release</button>
           <button onClick={() => setDialog("defect")}>New defect</button>
           <button className="primary" onClick={() => setDialog("link")}>
             Link requirement → test case
@@ -109,33 +108,6 @@ export function BacklogPage() {
                 <td className="nowrap">
                   {r.status === "draft" && (
                     <button className="sm" onClick={() => transition.mutate({ kind: "requirements", id: r.id, version: r.version, to: "active" })}>
-                      Activate
-                    </button>
-                  )}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </EntitySection>
-
-        <EntitySection title="Releases" accent="var(--sec-plans)" empty={!releases.data?.items.length}>
-          <thead>
-            <tr>
-              <th className="nowrap">Key</th>
-              <th>Name</th>
-              <th className="nowrap">Status</th>
-              <th className="nowrap">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {releases.data?.items.map((r) => (
-              <tr key={r.id}>
-                <td className="key">{r.key}</td>
-                <td>{r.name}</td>
-                <td><Badge value={r.status} /></td>
-                <td className="nowrap">
-                  {r.status === "planned" && (
-                    <button className="sm" onClick={() => transition.mutate({ kind: "releases", id: r.id, version: r.version, to: "active" })}>
                       Activate
                     </button>
                   )}

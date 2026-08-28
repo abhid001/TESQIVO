@@ -14,7 +14,7 @@ import uuid
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.context import Actor
@@ -25,6 +25,7 @@ from app.models import (
     CycleTest,
     Defect,
     ExecutionAttempt,
+    Release,
     Requirement,
     TestCase,
     TestCycle,
@@ -407,6 +408,68 @@ async def cycle_breakdown(session: AsyncSession, actor: Actor, scope: Scope) -> 
         )
     rows.sort(key=lambda r: r["cycle_key"])
     return rows
+
+
+async def release_overview(
+    session: AsyncSession, actor: Actor, project_id: uuid.UUID
+) -> list[dict]:
+    """One execution roll-up per non-archived release, with the release's cycle
+    history - so the dashboard can show release-wise execution."""
+    authz.authorize(actor, "report.view", project_id=project_id)
+    releases = list(
+        await session.scalars(
+            select(Release)
+            .where(Release.project_id == project_id, Release.status != "archived")
+            .order_by(Release.key)
+        )
+    )
+    out: list[dict] = []
+    for rel in releases:
+        cycles = await cycle_breakdown(session, actor, Scope(project_id=project_id, release_id=rel.id))
+        scoped = sum(c["scoped"] for c in cycles)
+        terminal = sum(c["terminal"] for c in cycles)
+        passed = sum(c["passed"] for c in cycles)
+        failed = sum(c["failed"] for c in cycles)
+        blocked = sum(c["blocked"] for c in cycles)
+        pass_den = passed + failed + blocked
+        req_count = await session.scalar(
+            select(func.count())
+            .select_from(Requirement)
+            .where(Requirement.project_id == project_id, Requirement.release_id == rel.id)
+        )
+        crit = await session.scalar(
+            select(func.count())
+            .select_from(Defect)
+            .where(
+                Defect.project_id == project_id,
+                Defect.release_id == rel.id,
+                Defect.severity == "critical",
+                Defect.status.notin_(("closed", "rejected")),
+            )
+        )
+        out.append(
+            {
+                "release_id": str(rel.id),
+                "release_key": rel.key,
+                "name": rel.name,
+                "status": rel.status,
+                "version_label": rel.version_label,
+                "start_date": rel.start_date.isoformat() if rel.start_date else None,
+                "end_date": rel.end_date.isoformat() if rel.end_date else None,
+                "cycle_count": len(cycles),
+                "cycles": cycles,
+                "scoped_tests": scoped,
+                "terminal": terminal,
+                "passed": passed,
+                "failed": failed,
+                "blocked": blocked,
+                "completion": (terminal / scoped) if scoped else None,
+                "pass_rate": (passed / pass_den) if pass_den else None,
+                "requirements": req_count or 0,
+                "open_critical_defects": crit or 0,
+            }
+        )
+    return out
 
 
 # ---------------------------------------------------------------------------

@@ -37,6 +37,11 @@ async def summary(
     return await reporting.summary(db, actor, scope)
 
 
+@router.get("/projects/{project_id}/reports/release-overview")
+async def release_overview(project_id: str, actor: CurrentActor, db: DbSession) -> dict:
+    return {"releases": await reporting.release_overview(db, actor, uuid.UUID(project_id))}
+
+
 @router.get("/projects/{project_id}/reports/cycle-breakdown")
 async def cycle_breakdown(
     project_id: str, actor: CurrentActor, db: DbSession,

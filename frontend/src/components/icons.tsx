@@ -48,4 +48,11 @@ export const Icons = {
       <path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z" />
     </>,
   ),
+  releases: wrap(
+    <>
+      <path d="M4 4h11l5 5v11H4z" />
+      <path d="M9 4v6h6" />
+      <path d="M8 15h8M8 18h5" />
+    </>,
+  ),
 };

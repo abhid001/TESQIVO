@@ -24,12 +24,14 @@ import { CyclesPage } from "./pages/CyclesPage";
 import { CycleRunnerPage } from "./pages/CycleRunnerPage";
 import { TraceabilityPage } from "./pages/TraceabilityPage";
 import { BacklogPage } from "./pages/BacklogPage";
+import { ReleasesPage } from "./pages/ReleasesPage";
 
 const TABS = [
   { to: "dashboard", label: "Dashboard", section: "dashboard", accent: "var(--sec-dashboard)", icon: Icons.dashboard },
   { to: "repository", label: "Repository", section: "repository", accent: "var(--sec-repository)", icon: Icons.repository },
   { to: "plans", label: "Plans", section: "plans", accent: "var(--sec-plans)", icon: Icons.plans },
   { to: "cycles", label: "Cycles", section: "cycles", accent: "var(--sec-cycles)", icon: Icons.cycles },
+  { to: "releases", label: "Releases", section: "releases", accent: "var(--sec-releases)", icon: Icons.releases },
   { to: "traceability", label: "Traceability", section: "traceability", accent: "var(--sec-traceability)", icon: Icons.traceability },
   { to: "backlog", label: "Requirements & Defects", section: "backlog", accent: "var(--sec-backlog)", icon: Icons.backlog },
 ] as const;
@@ -100,6 +102,7 @@ function Shell() {
           <Route path="plans" element={<PlansPage />} />
           <Route path="cycles" element={<CyclesPage />} />
           <Route path="cycles/:cycleId/run" element={<CycleRunnerPage />} />
+          <Route path="releases" element={<ReleasesPage />} />
           <Route path="traceability" element={<TraceabilityPage />} />
           <Route path="backlog" element={<BacklogPage />} />
           <Route path="*" element={<Navigate to="dashboard" replace />} />

@@ -7,6 +7,7 @@ synchronization are Phase 2.
 from __future__ import annotations
 
 import uuid
+from datetime import datetime
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -106,18 +107,49 @@ async def transition_requirement(
 async def create_release(
     session: AsyncSession, actor: Actor, ctx: Ctx, *, project_id: uuid.UUID,
     name: str, description: str | None = None, version_label: str | None = None,
+    start_date: datetime | None = None, end_date: datetime | None = None,
 ) -> Release:
     await _project(session, project_id)
     authz.authorize(actor, "release.manage", project_id=project_id)
     rel = Release(
         project_id=project_id, key=await next_key(session, project_id, "release"),
         name=name.strip(), description=description, version_label=version_label,
+        start_date=start_date, end_date=end_date,
         owner_id=actor.id, created_by=actor.id, status="planned",
     )
     session.add(rel)
     await session.flush()
     audit.record(session, actor=actor, ctx=ctx, entity_type="release", action="release.created",
                  entity_id=rel.id, entity_key=rel.key, project_id=project_id, after={"name": rel.name})
+    await session.commit()
+    return rel
+
+
+async def update_release(
+    session: AsyncSession, actor: Actor, ctx: Ctx, *, release_id: uuid.UUID, expected_version: int,
+    name: str | None = None, description: str | None = None, version_label: str | None = None,
+    start_date: datetime | None = ..., end_date: datetime | None = ...,  # type: ignore[assignment]
+) -> Release:
+    rel = await session.get(Release, release_id)
+    if rel is None:
+        raise ResourceNotFound("Release not found.")
+    authz.authorize(actor, "release.manage", project_id=rel.project_id)
+    check_version(rel.version, expected_version, entity="release")
+    if name is not None:
+        rel.name = name.strip()
+    if description is not None:
+        rel.description = description
+    if version_label is not None:
+        rel.version_label = version_label or None
+    if start_date is not ...:
+        rel.start_date = start_date
+    if end_date is not ...:
+        rel.end_date = end_date
+    if rel.start_date and rel.end_date and rel.end_date < rel.start_date:
+        raise ValidationFailed("End date cannot be before the start date.")
+    rel.version += 1
+    audit.record(session, actor=actor, ctx=ctx, entity_type="release", action="release.updated",
+                 entity_id=rel.id, entity_key=rel.key, project_id=rel.project_id, after={"name": rel.name})
     await session.commit()
     return rel
 
