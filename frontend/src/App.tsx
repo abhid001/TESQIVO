@@ -1,7 +1,17 @@
 import { useEffect, useState } from "react";
-import { Navigate, NavLink, Route, Routes, useParams } from "react-router-dom";
+import {
+  Navigate,
+  Route,
+  Routes,
+  useLocation,
+  useNavigate,
+  useParams,
+} from "react-router-dom";
 import { useAuth } from "./auth/AuthContext";
 import { http } from "./api/client";
+import { useProjects } from "./api/hooks";
+import { Logo } from "./components/Logo";
+import { Icons } from "./components/icons";
 import { LoginPage } from "./pages/LoginPage";
 import { SetupPage } from "./pages/SetupPage";
 import { ProjectPicker } from "./pages/ProjectPicker";
@@ -14,38 +24,74 @@ import { CycleRunnerPage } from "./pages/CycleRunnerPage";
 import { TraceabilityPage } from "./pages/TraceabilityPage";
 import { BacklogPage } from "./pages/BacklogPage";
 
+const TABS = [
+  { to: "dashboard", label: "Dashboard", section: "dashboard", accent: "var(--sec-dashboard)", icon: Icons.dashboard },
+  { to: "repository", label: "Repository", section: "repository", accent: "var(--sec-repository)", icon: Icons.repository },
+  { to: "plans", label: "Plans", section: "plans", accent: "var(--sec-plans)", icon: Icons.plans },
+  { to: "cycles", label: "Cycles", section: "cycles", accent: "var(--sec-cycles)", icon: Icons.cycles },
+  { to: "traceability", label: "Traceability", section: "traceability", accent: "var(--sec-traceability)", icon: Icons.traceability },
+  { to: "backlog", label: "Requirements & Defects", section: "backlog", accent: "var(--sec-backlog)", icon: Icons.backlog },
+] as const;
+
 function Shell() {
   const { projectKey } = useParams();
   const { me, logout } = useAuth();
-  const base = `/p/${projectKey}`;
-  const link = (to: string, label: string) => (
-    <NavLink to={`${base}/${to}`} className={({ isActive }) => (isActive ? "active" : "")}>
-      {label}
-    </NavLink>
-  );
+  const nav = useNavigate();
+  const loc = useLocation();
+  const projects = useProjects();
+
+  const current =
+    TABS.find((t) => loc.pathname.includes(`/${t.to}`)) ?? TABS[0];
+
   return (
-    <div className="app-shell">
-      <aside className="sidebar">
-        <h1>TESQIVO</h1>
-        <div className="muted" style={{ marginBottom: 12 }}>{projectKey}</div>
-        <nav className="stack">
-          {link("dashboard", "Dashboard")}
-          {link("repository", "Repository")}
-          {link("plans", "Plans")}
-          {link("cycles", "Cycles")}
-          {link("traceability", "Traceability")}
-          {link("backlog", "Requirements & Defects")}
-          <NavLink to="/">Switch project</NavLink>
-        </nav>
-        <div style={{ marginTop: 24 }} className="muted">
-          {me?.display_name}
-          <br />
-          <button onClick={() => void logout()} style={{ marginTop: 6 }}>
+    <div className="app">
+      <div className="appbar">
+      <header className="topbar">
+        <div className="brand">
+          <Logo size={26} />
+          <span>TESQIVO</span>
+        </div>
+        <select
+          className="project-chip"
+          value={projectKey}
+          onChange={(e) => nav(`/p/${e.target.value}/${current.to}`)}
+          aria-label="Switch project"
+        >
+          {projects.data?.map((p) => (
+            <option key={p.id} value={p.key}>
+              {p.key} · {p.name}
+            </option>
+          ))}
+        </select>
+        <div className="spacer" />
+        <div className="user">
+          <span>{me?.display_name}</span>
+          <button className="sm" onClick={() => void logout()}>
             Sign out
           </button>
         </div>
-      </aside>
-      <main className="main">
+      </header>
+
+      <nav className="tabbar" aria-label="Sections">
+        {TABS.map((t) => {
+          const active = current.to === t.to;
+          return (
+            <button
+              key={t.to}
+              className={`tab ${active ? "active" : ""}`}
+              style={{ ["--accent" as string]: t.accent }}
+              aria-current={active ? "page" : undefined}
+              onClick={() => nav(`/p/${projectKey}/${t.to}`)}
+            >
+              <span className="tab-icon">{t.icon}</span>
+              {t.label}
+            </button>
+          );
+        })}
+      </nav>
+      </div>
+
+      <main className={`main section-${current.section}`}>
         <Routes>
           <Route path="dashboard" element={<DashboardPage />} />
           <Route path="repository" element={<RepositoryPage />} />

@@ -1,10 +1,37 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { http } from "../api/client";
 import { useProject } from "../api/hooks";
 import type { Defect, Paginated, Release, Requirement, TestCase } from "../api/types";
-import { Badge, Card, Dialog, EmptyState, Field, errText, useToast } from "../ui";
+import { Badge, Dialog, EmptyState, Field, errText, useToast } from "../ui";
+
+function EntitySection({
+  title,
+  accent,
+  empty,
+  children,
+}: {
+  title: string;
+  accent: string;
+  empty: boolean;
+  children: ReactNode;
+}) {
+  return (
+    <section>
+      <h3 className="section-title" style={{ ["--dot" as string]: accent }}>
+        {title}
+      </h3>
+      {empty ? (
+        <EmptyState>Nothing here yet.</EmptyState>
+      ) : (
+        <div className="table-wrap">
+          <table>{children}</table>
+        </div>
+      )}
+    </section>
+  );
+}
 
 export function BacklogPage() {
   const { projectKey } = useParams();
@@ -63,120 +90,89 @@ export function BacklogPage() {
         </div>
       </div>
 
-      <div className="grid cols-2">
-        <Card>
-          <h3 style={{ marginTop: 0 }}>Requirements</h3>
-          {reqs.data?.items.length ? (
-            <table>
-              <tbody>
-                {reqs.data.items.map((r) => (
-                  <tr key={r.id}>
-                    <td className="key">{r.key}</td>
-                    <td>{r.title}</td>
-                    <td>
-                      <Badge value={r.status} />
-                    </td>
-                    <td>
-                      {r.status === "draft" && (
-                        <button
-                          onClick={() =>
-                            transition.mutate({
-                              kind: "requirements",
-                              id: r.id,
-                              version: r.version,
-                              to: "active",
-                            })
-                          }
-                        >
-                          Activate
-                        </button>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          ) : (
-            <EmptyState>None</EmptyState>
-          )}
-        </Card>
+      <div className="stack">
+        <EntitySection title="Requirements" accent="var(--sec-backlog)" empty={!reqs.data?.items.length}>
+          <thead>
+            <tr>
+              <th className="nowrap">Key</th>
+              <th>Title</th>
+              <th className="nowrap">Status</th>
+              <th className="nowrap">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {reqs.data?.items.map((r) => (
+              <tr key={r.id}>
+                <td className="key">{r.key}</td>
+                <td>{r.title}</td>
+                <td><Badge value={r.status} /></td>
+                <td className="nowrap">
+                  {r.status === "draft" && (
+                    <button className="sm" onClick={() => transition.mutate({ kind: "requirements", id: r.id, version: r.version, to: "active" })}>
+                      Activate
+                    </button>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </EntitySection>
 
-        <Card>
-          <h3 style={{ marginTop: 0 }}>Releases</h3>
-          {releases.data?.items.length ? (
-            <table>
-              <tbody>
-                {releases.data.items.map((r) => (
-                  <tr key={r.id}>
-                    <td className="key">{r.key}</td>
-                    <td>{r.name}</td>
-                    <td>
-                      <Badge value={r.status} />
-                    </td>
-                    <td>
-                      {r.status === "planned" && (
-                        <button
-                          onClick={() =>
-                            transition.mutate({
-                              kind: "releases",
-                              id: r.id,
-                              version: r.version,
-                              to: "active",
-                            })
-                          }
-                        >
-                          Activate
-                        </button>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          ) : (
-            <EmptyState>None</EmptyState>
-          )}
-        </Card>
+        <EntitySection title="Releases" accent="var(--sec-plans)" empty={!releases.data?.items.length}>
+          <thead>
+            <tr>
+              <th className="nowrap">Key</th>
+              <th>Name</th>
+              <th className="nowrap">Status</th>
+              <th className="nowrap">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {releases.data?.items.map((r) => (
+              <tr key={r.id}>
+                <td className="key">{r.key}</td>
+                <td>{r.name}</td>
+                <td><Badge value={r.status} /></td>
+                <td className="nowrap">
+                  {r.status === "planned" && (
+                    <button className="sm" onClick={() => transition.mutate({ kind: "releases", id: r.id, version: r.version, to: "active" })}>
+                      Activate
+                    </button>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </EntitySection>
 
-        <Card>
-          <h3 style={{ marginTop: 0 }}>Defects</h3>
-          {defects.data?.items.length ? (
-            <table>
-              <tbody>
-                {defects.data.items.map((d) => (
-                  <tr key={d.id}>
-                    <td className="key">{d.key}</td>
-                    <td>{d.summary}</td>
-                    <td>
-                      <Badge value={d.severity} />
-                    </td>
-                    <td>
-                      <Badge value={d.status} />
-                    </td>
-                    <td>
-                      {d.status === "new" && (
-                        <button
-                          onClick={() =>
-                            transition.mutate({
-                              kind: "defects",
-                              id: d.id,
-                              version: d.version,
-                              to: "open",
-                            })
-                          }
-                        >
-                          Open
-                        </button>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          ) : (
-            <EmptyState>None</EmptyState>
-          )}
-        </Card>
+        <EntitySection title="Defects" accent="var(--sec-traceability)" empty={!defects.data?.items.length}>
+          <thead>
+            <tr>
+              <th className="nowrap">Key</th>
+              <th>Summary</th>
+              <th className="nowrap">Severity</th>
+              <th className="nowrap">Status</th>
+              <th className="nowrap">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {defects.data?.items.map((d) => (
+              <tr key={d.id}>
+                <td className="key">{d.key}</td>
+                <td>{d.summary}</td>
+                <td><Badge value={d.severity} /></td>
+                <td><Badge value={d.status} /></td>
+                <td className="nowrap">
+                  {d.status === "new" && (
+                    <button className="sm" onClick={() => transition.mutate({ kind: "defects", id: d.id, version: d.version, to: "open" })}>
+                      Open
+                    </button>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </EntitySection>
       </div>
 
       {dialog && dialog !== "link" && (

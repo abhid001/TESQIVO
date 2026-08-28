@@ -34,7 +34,7 @@ export function CycleRunnerPage() {
       <div className="page-header">
         <h2>Execution Runner</h2>
       </div>
-      <div className="grid" style={{ gridTemplateColumns: "320px 1fr" }}>
+      <div className="runner-grid">
         <Card>
           <h3 style={{ marginTop: 0 }}>Cycle tests</h3>
           {cts.data?.items.length ? (

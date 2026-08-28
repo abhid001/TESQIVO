@@ -141,7 +141,7 @@ export function CyclesPage() {
           <Field label="Name">
             <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
           </Field>
-          <div className="row">
+          <div className="field-row">
             <Field label="Environment">
               <input
                 value={form.environment}

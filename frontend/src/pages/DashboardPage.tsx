@@ -6,6 +6,13 @@ import type { Cycle, ReportSummary } from "../api/types";
 import { Card, EmptyState } from "../ui";
 import { useState } from "react";
 
+function metricAccent(id: string): string {
+  if (["M-01", "M-02", "M-03", "M-04"].includes(id)) return "var(--sec-repository)"; // execution
+  if (["M-05", "M-06", "M-07", "M-08", "M-09"].includes(id)) return "var(--sec-plans)"; // coverage
+  if (["M-10", "M-11"].includes(id)) return "var(--sec-traceability)"; // defects
+  return "var(--sec-backlog)"; // automation / trace links
+}
+
 export function DashboardPage() {
   const { projectKey } = useParams();
   const { project } = useProject(projectKey);
@@ -26,8 +33,8 @@ export function DashboardPage() {
     <>
       <div className="page-header">
         <h2>Dashboard</h2>
-        <div className="row">
-          <select value={cycleId} onChange={(e) => setCycleId(e.target.value)}>
+        <div className="inline-actions">
+          <select value={cycleId} onChange={(e) => setCycleId(e.target.value)} style={{ width: "auto" }}>
             <option value="">All cycles (project scope)</option>
             {cycles.data?.map((c) => (
               <option key={c.id} value={c.id}>
@@ -55,7 +62,11 @@ export function DashboardPage() {
           </p>
           <div className="grid cols-3">
             {summary.data.metrics.map((m) => (
-              <Card key={m.metric_id} className="metric">
+              <Card
+                key={m.metric_id}
+                className="metric"
+                style={{ ["--metric-accent" as string]: metricAccent(m.metric_id) }}
+              >
                 <div className="value">{m.display}</div>
                 <div className="label">
                   {m.metric_id} · {m.label}

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useAuth } from "../auth/AuthContext";
 import { Card, Field, errText } from "../ui";
+import { Logo } from "../components/Logo";
 
 export function LoginPage() {
   const { login } = useAuth();
@@ -23,21 +24,23 @@ export function LoginPage() {
   };
 
   return (
-    <div className="centered">
+    <div className="auth-shell">
       <Card className="auth-card">
-        <h2>Sign in to TESQIVO</h2>
+        <div className="brand-lockup" style={{ color: "var(--primary)" }}>
+          <Logo size={28} />
+          TESQIVO
+        </div>
+        <p className="muted" style={{ marginTop: 0 }}>
+          Sign in to the quality system of record.
+        </p>
         <form onSubmit={submit}>
           <Field label="Username">
             <input value={username} onChange={(e) => setU(e.target.value)} autoFocus />
           </Field>
           <Field label="Password" error={error ?? undefined}>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setP(e.target.value)}
-            />
+            <input type="password" value={password} onChange={(e) => setP(e.target.value)} />
           </Field>
-          <button className="primary" disabled={busy || !username || !password}>
+          <button className="primary" style={{ width: "100%", justifyContent: "center" }} disabled={busy || !username || !password}>
             {busy ? "Signing in…" : "Sign in"}
           </button>
         </form>

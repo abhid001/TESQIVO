@@ -60,7 +60,7 @@ export function RepositoryPage() {
         </button>
       </div>
 
-      <div className="row" style={{ marginBottom: 12 }}>
+      <div className="toolbar">
         <input placeholder="Search title or key…" value={q} onChange={(e) => setQ(e.target.value)} />
         <select value={state} onChange={(e) => setState(e.target.value)}>
           <option value="">Any state</option>

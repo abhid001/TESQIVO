@@ -5,12 +5,25 @@ import {
   useEffect,
   useRef,
   useState,
+  type CSSProperties,
   type ReactNode,
 } from "react";
 import { ApiError } from "../api/client";
 
-export function Card({ children, className = "" }: { children: ReactNode; className?: string }) {
-  return <div className={`card ${className}`}>{children}</div>;
+export function Card({
+  children,
+  className = "",
+  style,
+}: {
+  children: ReactNode;
+  className?: string;
+  style?: CSSProperties;
+}) {
+  return (
+    <div className={`card ${className}`} style={style}>
+      {children}
+    </div>
+  );
 }
 
 export function Badge({ value }: { value: string }) {
@@ -64,13 +77,13 @@ export function Dialog({
         aria-label={title}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="page-header">
+        <div className="dialog-head">
           <h2>{title}</h2>
-          <button onClick={onClose} aria-label="Close">
+          <button className="ghost sm" onClick={onClose} aria-label="Close">
             ✕
           </button>
         </div>
-        {children}
+        <div className="dialog-body">{children}</div>
       </div>
     </div>
   );

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { api } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
 import { Card, Field, errText } from "../ui";
+import { Logo } from "../components/Logo";
 
 export function SetupPage({ onDone }: { onDone: () => void }) {
   const { login } = useAuth();
@@ -42,9 +43,13 @@ export function SetupPage({ onDone }: { onDone: () => void }) {
   };
 
   return (
-    <div className="centered">
+    <div className="auth-shell">
       <Card className="auth-card">
-        <h2>Create the first administrator</h2>
+        <div className="brand-lockup" style={{ color: "var(--primary)" }}>
+          <Logo size={28} />
+          TESQIVO
+        </div>
+        <h2 style={{ marginTop: 4 }}>Create the first administrator</h2>
         <p className="muted">
           Enter the bootstrap token from your <code>.env</code> and choose an admin
           account. This screen is available only until setup completes.

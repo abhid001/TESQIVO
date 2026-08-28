@@ -5,6 +5,7 @@ import { http } from "../api/client";
 import { useProjects } from "../api/hooks";
 import { useAuth } from "../auth/AuthContext";
 import { Card, Dialog, Field, EmptyState, errText, useToast } from "../ui";
+import { Logo } from "../components/Logo";
 
 export function ProjectPicker() {
   const { data, isLoading } = useProjects();
@@ -26,13 +27,17 @@ export function ProjectPicker() {
   });
 
   return (
-    <div className="centered">
+    <div className="auth-shell">
       <Card className="auth-card">
+        <div className="brand-lockup" style={{ color: "var(--primary)" }}>
+          <Logo size={28} />
+          TESQIVO
+        </div>
         <div className="page-header">
           <h2>Projects</h2>
           {me?.is_system_admin && (
             <button className="primary" onClick={() => setCreating(true)}>
-              New project
+              + New project
             </button>
           )}
         </div>
@@ -43,10 +48,12 @@ export function ProjectPicker() {
             {data.map((p) => (
               <button
                 key={p.id}
-                style={{ width: "100%", textAlign: "left" }}
+                className="card"
+                style={{ width: "100%", textAlign: "left", display: "block" }}
                 onClick={() => nav(`/p/${p.key}/dashboard`)}
               >
-                <strong>{p.key}</strong> — {p.name}
+                <strong className="key">{p.key}</strong>
+                <span className="muted"> — {p.name}</span>
               </button>
             ))}
           </div>

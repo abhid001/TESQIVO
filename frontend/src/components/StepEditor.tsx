@@ -22,44 +22,46 @@ export function StepEditor({
   };
 
   return (
-    <div>
-      <label>Steps</label>
+    <div className="step-editor">
+      <span className="field-label">Steps</span>
       <div className="stack">
         {steps.map((s, i) => (
-          <div key={i} className="card" style={{ padding: 10 }}>
-            <div className="row">
-              <strong>#{i + 1}</strong>
-              <button type="button" onClick={() => move(i, -1)} aria-label="Move up">
-                ↑
-              </button>
-              <button type="button" onClick={() => move(i, 1)} aria-label="Move down">
-                ↓
-              </button>
-              <label style={{ marginLeft: "auto", display: "flex", gap: 4 }}>
-                <input
-                  type="checkbox"
-                  style={{ width: "auto" }}
-                  checked={s.is_required}
-                  onChange={(e) => update(i, { is_required: e.target.checked })}
-                />
-                required
-              </label>
-              <button
-                type="button"
-                className="danger"
-                onClick={() => onChange(steps.filter((_, idx) => idx !== i))}
-              >
-                Remove
-              </button>
+          <div key={i} className="step-row">
+            <div className="step-row-head">
+              <strong>Step {i + 1}</strong>
+              <div className="inline-actions">
+                <button type="button" className="sm" onClick={() => move(i, -1)} disabled={i === 0} aria-label="Move up">
+                  ↑
+                </button>
+                <button type="button" className="sm" onClick={() => move(i, 1)} disabled={i === steps.length - 1} aria-label="Move down">
+                  ↓
+                </button>
+                <label className="checkbox">
+                  <input
+                    type="checkbox"
+                    checked={s.is_required}
+                    onChange={(e) => update(i, { is_required: e.target.checked })}
+                  />
+                  required
+                </label>
+                <button
+                  type="button"
+                  className="sm ghost"
+                  style={{ color: "var(--danger)" }}
+                  onClick={() => onChange(steps.filter((_, idx) => idx !== i))}
+                  disabled={steps.length === 1}
+                >
+                  Remove
+                </button>
+              </div>
             </div>
             <input
-              placeholder="Action"
+              placeholder="Action — what the tester does"
               value={s.action}
               onChange={(e) => update(i, { action: e.target.value })}
             />
             <input
               placeholder="Expected result"
-              style={{ marginTop: 6 }}
               value={s.expected_result}
               onChange={(e) => update(i, { expected_result: e.target.value })}
             />
@@ -68,10 +70,11 @@ export function StepEditor({
       </div>
       <button
         type="button"
-        style={{ marginTop: 8 }}
+        className="sm"
+        style={{ marginTop: 10 }}
         onClick={() => onChange([...steps, { action: "", expected_result: "", is_required: true }])}
       >
-        Add step
+        + Add step
       </button>
     </div>
   );
