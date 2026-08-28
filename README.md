@@ -31,6 +31,9 @@ This repository implements the **Phase 1 vertical slice** (PRS §18 increments 1
 Frontend: React SPA covering Dashboard, Repository, Plans, Cycles, Execution Runner,
 Traceability, and Requirements/Defects.
 
+**Handing it to a tester?** See [`docs/TESTING_GUIDE.md`](docs/TESTING_GUIDE.md) —
+end-to-end steps to stand it up, create tester accounts, and a suggested walkthrough.
+
 ## Quick start (Docker)
 
 ```bash
