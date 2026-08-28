@@ -213,23 +213,46 @@ code, .key { font-family: var(--mono); }
 
 /* dashboard */
 .headline-grid { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); }
-.headline { display: grid; gap: 6px; align-content: start; }
+.headline {
+  display: grid;
+  gap: 6px;
+  align-content: start;
+  justify-items: start;
+  text-align: left;
+  width: 100%;
+  padding: 18px;
+  font-weight: 400;
+  white-space: normal;
+  cursor: pointer;
+}
+.headline:hover { background: var(--surface-2); box-shadow: var(--shadow-md); }
 .headline-value { font-size: 34px; font-weight: 750; letter-spacing: -1px; line-height: 1; }
 .headline-name { font-weight: 600; }
 .headline-sub { color: var(--text-dim); font-size: 12.5px; }
+.drill-hint { color: var(--text-dim); font-weight: 700; opacity: 0.55; }
+.headline:hover .drill-hint, .metric-row:hover .drill-hint { opacity: 1; color: var(--primary); }
 
 .mbar { height: 8px; border-radius: 999px; background: var(--surface-3); overflow: hidden; }
 .mbar span { display: block; height: 100%; border-radius: 999px; transition: width 0.4s ease; min-width: 2px; }
 
-.metric-list { display: grid; gap: 4px; }
+.metric-list { display: grid; gap: 0; }
 .metric-row {
   display: grid;
   grid-template-columns: minmax(150px, 1.4fr) minmax(80px, 2fr) minmax(96px, auto);
   gap: 14px;
   align-items: center;
-  padding: 9px 4px;
+  width: 100%;
+  padding: 10px 6px;
+  border: none;
   border-bottom: 1px solid var(--border);
+  border-radius: 0;
+  background: transparent;
+  text-align: left;
+  font-weight: 400;
+  white-space: normal;
+  cursor: pointer;
 }
+.metric-row:hover { background: var(--surface-2); }
 .metric-row:last-child { border-bottom: none; }
 .metric-row-label { font-weight: 500; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .metric-row-value { text-align: right; font-weight: 650; font-variant-numeric: tabular-nums; }
@@ -409,6 +432,9 @@ td.nowrap, th.nowrap { white-space: nowrap; }
 .dialog-head h2 { margin: 0; font-size: 17px; }
 .dialog-body { padding: 20px; overflow-y: auto; }
 .dialog-body table { font-size: 13px; }
+.dialog-body td.drill-wide { white-space: normal; min-width: 180px; }
+tr.drill-linked { cursor: pointer; }
+tr.drill-linked:hover { background: color-mix(in srgb, var(--primary) 10%, transparent); }
 
 /* ---------- misc ---------- */
 .centered { display: grid; place-items: center; min-height: 100%; padding: 24px; }

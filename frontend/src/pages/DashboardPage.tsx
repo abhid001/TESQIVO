@@ -5,6 +5,7 @@ import { http } from "../api/client";
 import { useProject, useList } from "../api/hooks";
 import type { Cycle, Metric, ReportSummary } from "../api/types";
 import { Card, EmptyState } from "../ui";
+import { DrillDownDialog } from "../components/DrillDownDialog";
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? "/api/v1";
 
@@ -47,15 +48,21 @@ function Bar({ value, accent }: { value: number | null; accent: string }) {
   );
 }
 
-function Headline({ m, invert = false }: { m: Metric; invert?: boolean }) {
+function Headline({ m, onOpen, invert = false }: { m: Metric; onOpen: () => void; invert?: boolean }) {
   const meta = META[m.metric_id];
   const good = m.kind === "count" ? (invert ? m.value === 0 : true) : (m.value ?? 0) >= 0.8;
   return (
-    <Card className="headline" title={meta.help}>
+    <button
+      className="card headline"
+      title={`${meta.help}\nClick to see the records`}
+      onClick={onOpen}
+    >
       <div className="headline-value" style={{ color: invert && m.value ? "var(--danger)" : undefined }}>
         {m.display}
       </div>
-      <div className="headline-name">{meta.name}</div>
+      <div className="headline-name">
+        {meta.name} <span className="drill-hint">↗</span>
+      </div>
       {m.kind === "ratio" && (
         <>
           <Bar value={m.value} accent={good ? "var(--success)" : meta.accent} />
@@ -64,17 +71,18 @@ function Headline({ m, invert = false }: { m: Metric; invert?: boolean }) {
           </div>
         </>
       )}
-    </Card>
+    </button>
   );
 }
 
-function MetricRow({ m }: { m: Metric }) {
+function MetricRow({ m, onOpen }: { m: Metric; onOpen: () => void }) {
   const meta = META[m.metric_id];
   return (
-    <div className="metric-row" title={meta.help}>
+    <button className="metric-row" title={`${meta.help}\nClick to see the records`} onClick={onOpen}>
       <div className="metric-row-label">
         {meta.name}
         <span className="mtag">{m.metric_id}</span>
+        <span className="drill-hint">↗</span>
       </div>
       {m.kind === "ratio" ? (
         <>
@@ -92,7 +100,7 @@ function MetricRow({ m }: { m: Metric }) {
           <div className="metric-row-value">{m.display}</div>
         </>
       )}
-    </div>
+    </button>
   );
 }
 
@@ -101,6 +109,7 @@ export function DashboardPage() {
   const { project } = useProject(projectKey);
   const pid = project?.id;
   const [cycleId, setCycleId] = useState("");
+  const [openMetric, setOpenMetric] = useState<string | null>(null);
 
   const cycles = useList<Cycle[]>(["cycles", pid], `/projects/${pid}/cycles`, !!pid);
   const query = new URLSearchParams(cycleId ? { cycle_id: cycleId } : {}).toString();
@@ -143,10 +152,10 @@ export function DashboardPage() {
           </p>
 
           <div className="headline-grid">
-            {byId["M-05"] && <Headline m={byId["M-05"]} />}
-            {byId["M-02"] && <Headline m={byId["M-02"]} />}
-            {byId["M-03"] && <Headline m={byId["M-03"]} />}
-            {byId["M-10"] && <Headline m={byId["M-10"]} invert />}
+            {byId["M-05"] && <Headline m={byId["M-05"]} onOpen={() => setOpenMetric("M-05")} />}
+            {byId["M-02"] && <Headline m={byId["M-02"]} onOpen={() => setOpenMetric("M-02")} />}
+            {byId["M-03"] && <Headline m={byId["M-03"]} onOpen={() => setOpenMetric("M-03")} />}
+            {byId["M-10"] && <Headline m={byId["M-10"]} onOpen={() => setOpenMetric("M-10")} invert />}
           </div>
 
           {GROUPS.map((g) => (
@@ -156,7 +165,7 @@ export function DashboardPage() {
               </h3>
               <div className="metric-list">
                 {g.ids.filter((id) => byId[id]).map((id) => (
-                  <MetricRow key={id} m={byId[id]} />
+                  <MetricRow key={id} m={byId[id]} onOpen={() => setOpenMetric(id)} />
                 ))}
               </div>
             </Card>
@@ -168,6 +177,16 @@ export function DashboardPage() {
             </EmptyState>
           )}
         </div>
+      )}
+
+      {openMetric && pid && projectKey && (
+        <DrillDownDialog
+          projectId={pid}
+          projectKey={projectKey}
+          metricId={openMetric}
+          query={query}
+          onClose={() => setOpenMetric(null)}
+        />
       )}
     </>
   );

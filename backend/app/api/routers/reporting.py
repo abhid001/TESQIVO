@@ -63,22 +63,9 @@ async def summary_csv(
 @router.get("/projects/{project_id}/reports/{metric_id}/drill-down")
 async def drill_down(
     project_id: str, metric_id: str, actor: CurrentActor, db: DbSession,
-    release_id: str | None = None, cycle_id: str | None = None,
+    release_id: str | None = None, plan_id: str | None = None, cycle_id: str | None = None,
+    environment: str | None = None, build: str | None = None,
 ) -> dict:
-    """Phase 1 drill-down returns the contributing cycle tests / requirements for
-    the metric. (Full per-metric contributor queries are increment 9 follow-up.)"""
-    scope = _scope(project_id, release_id, None, cycle_id, None, None)
-    from app.domain.reporting import _scoped_cycle_tests
-
-    cts = await _scoped_cycle_tests(db, scope)
-    from app.domain.execution import resolve_cycle_test_result
-
-    contributors = []
-    for ct in cts:
-        res = await resolve_cycle_test_result(db, ct.id)
-        contributors.append({
-            "cycle_test_id": str(ct.id),
-            "test_case_id": str(ct.test_case_id),
-            "displayed_result": res.displayed_result,
-        })
-    return {"metric_id": metric_id, "scope": scope.as_dict(), "contributors": contributors}
+    """The exact contributing records behind a dashboard number (PRS §9)."""
+    scope = _scope(project_id, release_id, plan_id, cycle_id, environment, build)
+    return await reporting.drill_down(db, actor, scope, metric_id.upper())

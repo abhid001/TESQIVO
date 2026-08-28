@@ -361,3 +361,313 @@ async def summary(session: AsyncSession, actor: Actor, scope: Scope) -> dict:
         "data_as_of": datetime.now(UTC).isoformat(),
         "metrics": [m.to_json(scope) for m in metrics],
     }
+
+
+# ---------------------------------------------------------------------------
+# Drill-down: every dashboard number resolves to its contributing records
+# (PRS §9 "Every metric supports drill-down to its exact contributing records";
+# acceptance §19.6 "every count drills down to its contributors").
+# ---------------------------------------------------------------------------
+
+METRIC_HELP = {
+    "M-01": "Distinct cycle tests in the selected scope.",
+    "M-02": "Cycle tests with a finished result (passed, failed, blocked, skipped, aborted).",
+    "M-03": "Passed / (passed + failed + blocked).",
+    "M-04": "Cycle tests with no attempt yet.",
+    "M-05": "Active requirements with at least one approved/active linked test.",
+    "M-06": "Active requirements covered by a test in the selected plan/cycle scope.",
+    "M-07": "Active requirements whose linked in-scope test has been executed.",
+    "M-08": "Active requirements for which every qualifying in-scope test passed.",
+    "M-09": "Active requirements with no qualifying linked test.",
+    "M-10": "Distinct critical defects that are not closed or rejected.",
+    "M-11": "Active requirements linked to an open/in-progress critical or high defect.",
+    "M-12": "Automated / automation-eligible active tests.",
+    "M-13": "Resolvable / total active trace links.",
+}
+METRIC_LABELS = {
+    "M-01": "Tests in scope", "M-02": "Execution complete", "M-03": "Pass rate",
+    "M-04": "Not started", "M-05": "Design coverage", "M-06": "Plan coverage",
+    "M-07": "Execution coverage", "M-08": "Pass coverage", "M-09": "Uncovered requirements",
+    "M-10": "Open critical defects", "M-11": "Requirements at risk",
+    "M-12": "Automation coverage", "M-13": "Trace-link health",
+}
+
+
+async def drill_down(
+    session: AsyncSession, actor: Actor, scope: Scope, metric_id: str
+) -> dict:
+    authz.authorize(actor, "report.view", project_id=scope.project_id)
+    if metric_id not in METRIC_LABELS:
+        from app.core.errors import ResourceNotFound
+
+        raise ResourceNotFound(f"Unknown metric '{metric_id}'.")
+
+    cts = await _scoped_cycle_tests(session, scope)
+    tc_by_id: dict[uuid.UUID, TestCase] = {}
+    cyc_by_id: dict[uuid.UUID, TestCycle] = {}
+    for ct in cts:
+        if ct.test_case_id not in tc_by_id:
+            tc_by_id[ct.test_case_id] = await session.get(TestCase, ct.test_case_id)
+        if ct.cycle_id not in cyc_by_id:
+            cyc_by_id[ct.cycle_id] = await session.get(TestCycle, ct.cycle_id)
+    results: dict[uuid.UUID, str] = {
+        ct.id: (await resolve_cycle_test_result(session, ct.id)).displayed_result for ct in cts
+    }
+    active_reqs = list(
+        await session.scalars(
+            select(Requirement).where(
+                Requirement.project_id == scope.project_id, Requirement.status == "active"
+            )
+        )
+    )
+    req_to_tcs: dict[uuid.UUID, set[uuid.UUID]] = {}
+    for req in active_reqs:
+        links = await session.scalars(
+            select(TraceLink).where(
+                TraceLink.project_id == scope.project_id,
+                TraceLink.removed_at.is_(None),
+                TraceLink.source_type == "requirement",
+                TraceLink.source_id == req.id,
+                TraceLink.target_type == "test_case",
+            )
+        )
+        req_to_tcs[req.id] = {l.target_id for l in links}
+    for ids in req_to_tcs.values():
+        for tc_id in ids:
+            if tc_id not in tc_by_id:
+                tc_by_id[tc_id] = await session.get(TestCase, tc_id)
+    cts_by_tc: dict[uuid.UUID, list[CycleTest]] = {}
+    for ct in cts:
+        cts_by_tc.setdefault(ct.test_case_id, []).append(ct)
+
+    def qualifying_tc_keys(req_id: uuid.UUID) -> list[str]:
+        return [
+            tc_by_id[t].key
+            for t in req_to_tcs.get(req_id, set())
+            if (tc := tc_by_id.get(t)) is not None and _tc_qualifies(tc)
+        ]
+
+    def req_scoped_cts(req_id: uuid.UUID) -> list[CycleTest]:
+        out: list[CycleTest] = []
+        for t in req_to_tcs.get(req_id, set()):
+            tc = tc_by_id.get(t)
+            if tc and _tc_qualifies(tc):
+                out.extend(cts_by_tc.get(t, []))
+        return out
+
+    def tc_link(tc: TestCase | None):
+        return {"kind": "test_case", "id": str(tc.id), "key": tc.key} if tc else None
+
+    def ct_row(ct: CycleTest, extra: dict | None = None) -> dict:
+        tc = tc_by_id.get(ct.test_case_id)
+        cyc = cyc_by_id.get(ct.cycle_id)
+        cells = {
+            "test": f"{tc.key} — {tc.title}" if tc else str(ct.test_case_id),
+            "cycle": cyc.key if cyc else "",
+            "env": f"{cyc.environment}/{cyc.build}" if cyc else "",
+            "result": results.get(ct.id, "NOT_RUN"),
+        }
+        if extra:
+            cells.update(extra)
+        return {"cells": cells, "link": tc_link(tc)}
+
+    columns: list[dict] = []
+    rows: list[dict] = []
+
+    if metric_id in ("M-01", "M-02", "M-03"):
+        columns = [
+            {"key": "test", "label": "Test"},
+            {"key": "cycle", "label": "Cycle"},
+            {"key": "env", "label": "Env / Build"},
+            {"key": "result", "label": "Result"},
+        ]
+        pool = cts
+        if metric_id == "M-03":
+            pool = [c for c in cts if results[c.id] in ("PASSED", "FAILED", "BLOCKED")]
+        rows = [ct_row(c) for c in sorted(pool, key=lambda c: tc_by_id.get(c.test_case_id).key if tc_by_id.get(c.test_case_id) else "")]
+
+    elif metric_id == "M-04":
+        columns = [
+            {"key": "test", "label": "Test"},
+            {"key": "cycle", "label": "Cycle"},
+            {"key": "env", "label": "Env / Build"},
+        ]
+        for c in cts:
+            has = await session.scalar(
+                select(ExecutionAttempt.id).where(ExecutionAttempt.cycle_test_id == c.id).limit(1)
+            )
+            if has is None:
+                r = ct_row(c)
+                r["cells"].pop("result", None)
+                rows.append(r)
+
+    elif metric_id in ("M-05", "M-06", "M-07", "M-08", "M-09"):
+        columns = [
+            {"key": "requirement", "label": "Requirement"},
+            {"key": "status", "label": "In this metric"},
+            {"key": "tests", "label": "Qualifying tests"},
+        ]
+        for req in sorted(active_reqs, key=lambda r: r.key):
+            qkeys = qualifying_tc_keys(req.id)
+            scoped = req_scoped_cts(req.id)
+            scoped_results = [results[c.id] for c in scoped]
+            if metric_id == "M-05":
+                inc = bool(qkeys)
+            elif metric_id == "M-06":
+                inc = bool(scoped)
+            elif metric_id == "M-07":
+                inc = any(r in _TERMINAL for r in scoped_results)
+            elif metric_id == "M-08":
+                if not scoped:
+                    continue  # not in denominator
+                inc = bool(scoped_results) and all(r in ("PASSED", "SKIPPED") for r in scoped_results) and any(r == "PASSED" for r in scoped_results)
+            else:  # M-09
+                inc = not qkeys
+            if metric_id == "M-09" and not inc:
+                continue
+            if metric_id == "M-06":
+                scoped_keys = sorted(
+                    {tc_by_id[c.test_case_id].key for c in scoped if tc_by_id.get(c.test_case_id)}
+                )
+                tests_cell = ", ".join(scoped_keys) or "—"
+            else:
+                tests_cell = ", ".join(qkeys) or "—"
+            rows.append(
+                {
+                    "cells": {
+                        "requirement": f"{req.key} — {req.title}",
+                        "status": "counted" if inc else "not counted",
+                        "tests": tests_cell,
+                    },
+                    "link": None,
+                }
+            )
+
+    elif metric_id == "M-10":
+        columns = [
+            {"key": "defect", "label": "Defect"},
+            {"key": "severity", "label": "Severity"},
+            {"key": "status", "label": "Status"},
+        ]
+        crit = await session.scalars(
+            select(Defect).where(
+                Defect.project_id == scope.project_id,
+                Defect.severity == "critical",
+                Defect.status.notin_(("closed", "rejected")),
+            )
+        )
+        for d in sorted(crit, key=lambda d: d.key):
+            rows.append(
+                {
+                    "cells": {"defect": f"{d.key} — {d.summary}", "severity": d.severity, "status": d.status},
+                    "link": None,
+                }
+            )
+
+    elif metric_id == "M-11":
+        columns = [
+            {"key": "requirement", "label": "Requirement"},
+            {"key": "via", "label": "Linked defect(s)"},
+        ]
+        hot = {
+            r.id: r
+            for r in await session.scalars(
+                select(Defect).where(
+                    Defect.project_id == scope.project_id,
+                    Defect.severity.in_(("critical", "high")),
+                    Defect.status.in_(("open", "in_progress")),
+                )
+            )
+        }
+        for req in sorted(active_reqs, key=lambda r: r.key):
+            via: set[str] = set()
+            direct = await session.scalars(
+                select(TraceLink.source_id).where(
+                    TraceLink.project_id == scope.project_id,
+                    TraceLink.removed_at.is_(None),
+                    TraceLink.source_type == "defect",
+                    TraceLink.target_type == "requirement",
+                    TraceLink.target_id == req.id,
+                )
+            )
+            for did in direct:
+                if did in hot:
+                    via.add(f"{hot[did].key} (direct)")
+            for ct in req_scoped_cts(req.id):
+                dids = await session.scalars(
+                    select(AttemptDefectLink.defect_id)
+                    .join(ExecutionAttempt, ExecutionAttempt.id == AttemptDefectLink.attempt_id)
+                    .where(ExecutionAttempt.cycle_test_id == ct.id)
+                )
+                for did in dids:
+                    if did in hot:
+                        via.add(f"{hot[did].key} (via execution)")
+            if via:
+                rows.append(
+                    {
+                        "cells": {"requirement": f"{req.key} — {req.title}", "via": ", ".join(sorted(via))},
+                        "link": None,
+                    }
+                )
+
+    elif metric_id == "M-12":
+        columns = [
+            {"key": "test", "label": "Test"},
+            {"key": "automation", "label": "Automation status"},
+        ]
+        eligible = await session.scalars(
+            select(TestCase).where(
+                TestCase.project_id == scope.project_id,
+                TestCase.lifecycle_state == "active",
+                TestCase.is_eligible_for_automation.is_(True),
+                TestCase.automation_status != "not_applicable",
+            )
+        )
+        for tc in sorted(eligible, key=lambda t: t.key):
+            rows.append(
+                {
+                    "cells": {"test": f"{tc.key} — {tc.title}", "automation": tc.automation_status},
+                    "link": tc_link(tc),
+                }
+            )
+
+    else:  # M-13
+        columns = [
+            {"key": "source", "label": "Source"},
+            {"key": "target", "label": "Target"},
+            {"key": "type", "label": "Relationship"},
+            {"key": "resolvable", "label": "Resolvable"},
+        ]
+        from app.domain.traceability import _entity_project
+
+        links = await session.scalars(
+            select(TraceLink).where(
+                TraceLink.project_id == scope.project_id, TraceLink.removed_at.is_(None)
+            )
+        )
+        for lk in links:
+            sp = await _entity_project(session, lk.source_type, lk.source_id)
+            tp = await _entity_project(session, lk.target_type, lk.target_id)
+            ok = sp == scope.project_id and tp == scope.project_id
+            rows.append(
+                {
+                    "cells": {
+                        "source": f"{lk.source_type}",
+                        "target": f"{lk.target_type}",
+                        "type": lk.relationship_type,
+                        "resolvable": "yes" if ok else "no",
+                    },
+                    "link": None,
+                }
+            )
+
+    return {
+        "metric_id": metric_id,
+        "label": METRIC_LABELS[metric_id],
+        "help": METRIC_HELP[metric_id],
+        "scope": scope.as_dict(),
+        "formula_version": FORMULA_VERSION,
+        "columns": columns,
+        "rows": rows,
+        "row_count": len(rows),
+    }
