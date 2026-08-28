@@ -363,6 +363,52 @@ async def summary(session: AsyncSession, actor: Actor, scope: Scope) -> dict:
     }
 
 
+async def cycle_breakdown(session: AsyncSession, actor: Actor, scope: Scope) -> list[dict]:
+    """Execution progress per cycle in the selected scope - one row per cycle so
+    the dashboard can group execution by cycle and link straight to it."""
+    authz.authorize(actor, "report.view", project_id=scope.project_id)
+    cts = await _scoped_cycle_tests(session, scope)
+    by_cycle: dict[uuid.UUID, list[CycleTest]] = {}
+    for ct in cts:
+        by_cycle.setdefault(ct.cycle_id, []).append(ct)
+
+    rows: list[dict] = []
+    for cycle_id, cyc_cts in by_cycle.items():
+        cycle = await session.get(TestCycle, cycle_id)
+        if cycle is None:
+            continue
+        results = [
+            (await resolve_cycle_test_result(session, ct.id)).displayed_result for ct in cyc_cts
+        ]
+        scoped = len(cyc_cts)
+        terminal = sum(1 for r in results if r in _TERMINAL)
+        passed = results.count("PASSED")
+        failed = results.count("FAILED")
+        blocked = results.count("BLOCKED")
+        not_run = sum(1 for r in results if r in ("NOT_RUN", "RETEST_PENDING"))
+        pass_den = passed + failed + blocked
+        rows.append(
+            {
+                "cycle_id": str(cycle_id),
+                "cycle_key": cycle.key,
+                "name": cycle.name,
+                "environment": cycle.environment,
+                "build": cycle.build,
+                "status": cycle.status,
+                "scoped": scoped,
+                "terminal": terminal,
+                "passed": passed,
+                "failed": failed,
+                "blocked": blocked,
+                "not_run": not_run,
+                "completion": (terminal / scoped) if scoped else None,
+                "pass_rate": (passed / pass_den) if pass_den else None,
+            }
+        )
+    rows.sort(key=lambda r: r["cycle_key"])
+    return rows
+
+
 # ---------------------------------------------------------------------------
 # Drill-down: every dashboard number resolves to its contributing records
 # (PRS §9 "Every metric supports drill-down to its exact contributing records";

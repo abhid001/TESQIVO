@@ -37,6 +37,16 @@ async def summary(
     return await reporting.summary(db, actor, scope)
 
 
+@router.get("/projects/{project_id}/reports/cycle-breakdown")
+async def cycle_breakdown(
+    project_id: str, actor: CurrentActor, db: DbSession,
+    release_id: str | None = None, plan_id: str | None = None, cycle_id: str | None = None,
+    environment: str | None = None, build: str | None = None,
+) -> dict:
+    scope = _scope(project_id, release_id, plan_id, cycle_id, environment, build)
+    return {"cycles": await reporting.cycle_breakdown(db, actor, scope)}
+
+
 @router.get("/projects/{project_id}/reports/summary.csv")
 async def summary_csv(
     project_id: str, actor: CurrentActor, db: DbSession,

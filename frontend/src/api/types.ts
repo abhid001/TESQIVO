@@ -72,12 +72,31 @@ export interface Cycle {
 export interface CycleTestRow {
   id: string;
   test_case_id: string;
+  test_case_key: string;
+  test_case_title: string;
   test_case_version_id: string | null;
   assigned_to: string | null;
   displayed_result: string;
   authoritative_attempt_id: string | null;
   in_progress_attempt_id: string | null;
   attempt_count: number;
+}
+
+export interface CycleBreakdownRow {
+  cycle_id: string;
+  cycle_key: string;
+  name: string;
+  environment: string;
+  build: string;
+  status: string;
+  scoped: number;
+  terminal: number;
+  passed: number;
+  failed: number;
+  blocked: number;
+  not_run: number;
+  completion: number | null;
+  pass_rate: number | null;
 }
 
 export interface AttemptStep {

@@ -250,10 +250,16 @@ async def add_cycle_tests(
             assigned_to=assigned_to,
             added_by=actor.id,
         )
-        # If the cycle is already active, snapshot immediately.
-        if cycle.status in ("active", "reopened"):
-            await _snapshot_cycle_test(session, ct, tc)
         session.add(ct)
+        await session.flush()  # assign ct.id before snapshotting its steps
+        # If the cycle is already running, snapshot the approved version immediately.
+        if cycle.status in ("active", "reopened"):
+            if tc.approved_version_id is None:
+                raise ValidationFailed(
+                    f"{tc.key} has no approved version and cannot be added to a running cycle.",
+                    details=[{"field": "/test_case_ids", "code": "MISSING_APPROVED_VERSION", "message": tc.key}],
+                )
+            await _snapshot_cycle_test(session, ct, tc)
         added.append(ct)
     await session.flush()
     audit.record(
@@ -331,6 +337,45 @@ async def transition_cycle(
     )
     await session.commit()
     return cycle
+
+
+async def remove_cycle_test(
+    session: AsyncSession, actor: Actor, ctx: Ctx, *, cycle_test_id: uuid.UUID
+) -> None:
+    """Soft-remove a test from a cycle. Allowed on Draft / Active / Reopened cycles;
+    audited (PRS §7.2 "After activation, scope additions/removals are audited").
+    Execution history for the removed cycle test is preserved and stays visible in
+    reports for its own scope; it is dropped from live cycle metrics."""
+    ct = await session.get(CycleTest, cycle_test_id)
+    if ct is None or ct.removed_at is not None:
+        raise ResourceNotFound("Cycle test not found.")
+    cycle = await session.get(TestCycle, ct.cycle_id)
+    assert cycle is not None
+    authz.authorize(actor, "cycle.manage", project_id=ct.project_id)
+    if cycle.status not in ("draft", "active", "reopened"):
+        raise StateTransitionNotAllowed(
+            "Tests can only be removed from a Draft, Active or Reopened cycle."
+        )
+    in_progress = await session.scalar(
+        select(func.count())
+        .select_from(ExecutionAttempt)
+        .where(
+            ExecutionAttempt.cycle_test_id == cycle_test_id,
+            ExecutionAttempt.status == "IN_PROGRESS",
+        )
+    )
+    if in_progress:
+        raise StateTransitionNotAllowed(
+            "Finish or abort the in-progress attempt before removing this test."
+        )
+    tc = await session.get(TestCase, ct.test_case_id)
+    ct.removed_at = _now()
+    audit.record(
+        session, actor=actor, ctx=ctx, entity_type="test_cycle", action="cycle.scope_removed",
+        entity_id=cycle.id, entity_key=cycle.key, project_id=cycle.project_id,
+        before={"test_case": tc.key if tc else str(ct.test_case_id)},
+    )
+    await session.commit()
 
 
 async def refresh_cycle_test_version(

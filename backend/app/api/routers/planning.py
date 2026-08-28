@@ -12,7 +12,7 @@ from app.api.deps import CurrentActor, DbSession, RequestCtx
 from app.core.errors import ResourceNotFound
 from app.domain import authz, planning
 from app.domain.execution import resolve_cycle_test_result
-from app.models import CycleTest, PlanScopeItem, TestCycle, TestPlan
+from app.models import CycleTest, PlanScopeItem, TestCase, TestCycle, TestPlan
 
 router = APIRouter(tags=["planning"])
 
@@ -162,16 +162,21 @@ async def list_cycle_tests(cycle_id: str, actor: CurrentActor, db: DbSession) ->
         raise ResourceNotFound("Cycle not found.")
     authz.require_member(actor, cycle.project_id)
     rows = (
-        await db.scalars(
-            select(CycleTest).where(CycleTest.cycle_id == cycle.id, CycleTest.removed_at.is_(None))
+        await db.execute(
+            select(CycleTest, TestCase.key, TestCase.title)
+            .join(TestCase, TestCase.id == CycleTest.test_case_id)
+            .where(CycleTest.cycle_id == cycle.id, CycleTest.removed_at.is_(None))
+            .order_by(TestCase.key)
         )
     ).all()
     out = []
-    for ct in rows:
+    for ct, tc_key, tc_title in rows:
         res = await resolve_cycle_test_result(db, ct.id)
         out.append({
             "id": str(ct.id),
             "test_case_id": str(ct.test_case_id),
+            "test_case_key": tc_key,
+            "test_case_title": tc_title,
             "test_case_version_id": str(ct.test_case_version_id) if ct.test_case_version_id else None,
             "assigned_to": str(ct.assigned_to) if ct.assigned_to else None,
             "displayed_result": res.displayed_result,
@@ -195,3 +200,8 @@ async def transition_cycle(cycle_id: str, body: Transition, actor: CurrentActor,
 async def refresh_version(cycle_test_id: str, actor: CurrentActor, db: DbSession, ctx: RequestCtx) -> dict:
     ct = await planning.refresh_cycle_test_version(db, actor, ctx, cycle_test_id=uuid.UUID(cycle_test_id))
     return {"id": str(ct.id), "test_case_version_id": str(ct.test_case_version_id)}
+
+
+@router.delete("/cycle-tests/{cycle_test_id}", status_code=204)
+async def remove_cycle_test(cycle_test_id: str, actor: CurrentActor, db: DbSession, ctx: RequestCtx):
+    await planning.remove_cycle_test(db, actor, ctx, cycle_test_id=uuid.UUID(cycle_test_id))

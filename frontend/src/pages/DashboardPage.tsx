@@ -1,10 +1,10 @@
-import { useParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { http } from "../api/client";
 import { useProject, useList } from "../api/hooks";
-import type { Cycle, Metric, ReportSummary } from "../api/types";
-import { Card, EmptyState } from "../ui";
+import type { Cycle, CycleBreakdownRow, Metric, ReportSummary } from "../api/types";
+import { Badge, Card, EmptyState } from "../ui";
 import { DrillDownDialog } from "../components/DrillDownDialog";
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? "/api/v1";
@@ -26,11 +26,9 @@ const META: Record<string, { name: string; help: string; accent: string }> = {
   "M-13": { name: "Trace-link health", help: "Resolvable ÷ total active trace links.", accent: "var(--sec-backlog)" },
 };
 
-const GROUPS: { title: string; ids: string[] }[] = [
-  { title: "Requirement coverage", ids: ["M-05", "M-06", "M-07", "M-08", "M-09"] },
-  { title: "Execution progress", ids: ["M-01", "M-02", "M-03", "M-04"] },
-  { title: "Quality signals", ids: ["M-10", "M-11", "M-12", "M-13"] },
-];
+const COVERAGE = ["M-05", "M-06", "M-07", "M-08", "M-09"];
+const EXECUTION = ["M-01", "M-02", "M-03", "M-04"];
+const QUALITY = ["M-10", "M-11", "M-12", "M-13"];
 
 function relTime(iso: string): string {
   const diff = (Date.now() - new Date(iso).getTime()) / 1000;
@@ -75,6 +73,55 @@ function Headline({ m, onOpen, invert = false }: { m: Metric; onOpen: () => void
   );
 }
 
+function pct(v: number | null): string {
+  return v === null ? "–" : `${(v * 100).toFixed(1)}%`;
+}
+
+function CycleBreakdown({
+  rows,
+  onOpenCycle,
+}: {
+  rows: CycleBreakdownRow[];
+  onOpenCycle: (cycleId: string) => void;
+}) {
+  if (rows.length === 0) {
+    return <p className="muted">No cycles in scope yet. Create a plan and a cycle to track execution.</p>;
+  }
+  return (
+    <div className="cycle-breakdown">
+      {rows.map((c) => (
+        <button key={c.cycle_id} className="cycle-row" onClick={() => onOpenCycle(c.cycle_id)} title="Open in Cycles">
+          <div className="cycle-row-head">
+            <span className="key">{c.cycle_key}</span>
+            <span className="cycle-name">{c.name}</span>
+            <span className="muted">{c.environment} / {c.build}</span>
+            <Badge value={c.status} />
+            <span className="drill-hint" style={{ marginLeft: "auto" }}>↗</span>
+          </div>
+          <div className="cycle-row-metrics">
+            <div>
+              <div className="cm-label">Completion</div>
+              <Bar value={c.completion} accent="var(--sec-repository)" />
+              <div className="cm-value">{pct(c.completion)} · {c.terminal}/{c.scoped}</div>
+            </div>
+            <div>
+              <div className="cm-label">Pass rate</div>
+              <Bar value={c.pass_rate} accent={(c.pass_rate ?? 0) >= 0.8 ? "var(--success)" : "var(--sec-cycles)"} />
+              <div className="cm-value">{pct(c.pass_rate)}</div>
+            </div>
+            <div className="cm-counts">
+              <span className="badge PASSED">{c.passed} passed</span>
+              <span className="badge FAILED">{c.failed} failed</span>
+              <span className="badge BLOCKED">{c.blocked} blocked</span>
+              <span className="badge NOT_RUN">{c.not_run} not run</span>
+            </div>
+          </div>
+        </button>
+      ))}
+    </div>
+  );
+}
+
 function MetricRow({ m, onOpen }: { m: Metric; onOpen: () => void }) {
   const meta = META[m.metric_id];
   return (
@@ -108,6 +155,7 @@ export function DashboardPage() {
   const { projectKey } = useParams();
   const { project } = useProject(projectKey);
   const pid = project?.id;
+  const nav = useNavigate();
   const [cycleId, setCycleId] = useState("");
   const [openMetric, setOpenMetric] = useState<string | null>(null);
 
@@ -116,6 +164,12 @@ export function DashboardPage() {
   const summary = useQuery({
     queryKey: ["summary", pid, cycleId],
     queryFn: () => http.get<ReportSummary>(`/projects/${pid}/reports/summary?${query}`),
+    enabled: !!pid,
+  });
+  const breakdown = useQuery({
+    queryKey: ["cycle-breakdown", pid, cycleId],
+    queryFn: () =>
+      http.get<{ cycles: CycleBreakdownRow[] }>(`/projects/${pid}/reports/cycle-breakdown?${query}`),
     enabled: !!pid,
   });
 
@@ -158,18 +212,47 @@ export function DashboardPage() {
             {byId["M-10"] && <Headline m={byId["M-10"]} onOpen={() => setOpenMetric("M-10")} invert />}
           </div>
 
-          {GROUPS.map((g) => (
-            <Card key={g.title}>
-              <h3 className="section-title" style={{ ["--dot" as string]: META[g.ids[0]].accent }}>
-                {g.title}
-              </h3>
-              <div className="metric-list">
-                {g.ids.filter((id) => byId[id]).map((id) => (
-                  <MetricRow key={id} m={byId[id]} onOpen={() => setOpenMetric(id)} />
-                ))}
-              </div>
-            </Card>
-          ))}
+          <Card>
+            <h3 className="section-title" style={{ ["--dot" as string]: META["M-05"].accent }}>
+              Requirement coverage
+            </h3>
+            <div className="metric-list">
+              {COVERAGE.filter((id) => byId[id]).map((id) => (
+                <MetricRow key={id} m={byId[id]} onOpen={() => setOpenMetric(id)} />
+              ))}
+            </div>
+          </Card>
+
+          <Card>
+            <h3 className="section-title" style={{ ["--dot" as string]: META["M-02"].accent }}>
+              Execution progress by cycle
+            </h3>
+            <CycleBreakdown
+              rows={breakdown.data?.cycles ?? []}
+              onOpenCycle={() => nav(`/p/${projectKey}/cycles`)}
+            />
+            {(breakdown.data?.cycles.length ?? 0) > 0 && (
+              <>
+                <div className="metric-sub-title">Across all cycles in scope</div>
+                <div className="metric-list">
+                  {EXECUTION.filter((id) => byId[id]).map((id) => (
+                    <MetricRow key={id} m={byId[id]} onOpen={() => setOpenMetric(id)} />
+                  ))}
+                </div>
+              </>
+            )}
+          </Card>
+
+          <Card>
+            <h3 className="section-title" style={{ ["--dot" as string]: META["M-10"].accent }}>
+              Quality signals
+            </h3>
+            <div className="metric-list">
+              {QUALITY.filter((id) => byId[id]).map((id) => (
+                <MetricRow key={id} m={byId[id]} onOpen={() => setOpenMetric(id)} />
+              ))}
+            </div>
+          </Card>
 
           {summary.data.metrics.length === 0 && (
             <EmptyState>

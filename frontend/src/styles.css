@@ -217,7 +217,8 @@ code, .key { font-family: var(--mono); }
   display: grid;
   gap: 6px;
   align-content: start;
-  justify-items: start;
+  justify-items: stretch;
+  justify-content: normal;
   text-align: left;
   width: 100%;
   padding: 18px;
@@ -230,7 +231,39 @@ code, .key { font-family: var(--mono); }
 .headline-name { font-weight: 600; }
 .headline-sub { color: var(--text-dim); font-size: 12.5px; }
 .drill-hint { color: var(--text-dim); font-weight: 700; opacity: 0.55; }
-.headline:hover .drill-hint, .metric-row:hover .drill-hint { opacity: 1; color: var(--primary); }
+.headline:hover .drill-hint, .metric-row:hover .drill-hint, .cycle-row:hover .drill-hint { opacity: 1; color: var(--primary); }
+
+.metric-sub-title { margin: 16px 0 6px; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px; color: var(--text-dim); }
+
+.cycle-breakdown { display: grid; gap: 10px; }
+.cycle-row {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: 1fr;
+  justify-items: stretch;
+  justify-content: normal;
+  width: 100%;
+  text-align: left;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+  font-weight: 400;
+  white-space: normal;
+  cursor: pointer;
+}
+.cycle-row:hover { background: var(--surface-3); box-shadow: var(--shadow-sm); }
+.cycle-row-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.cycle-name { font-weight: 650; }
+.cycle-row-metrics { display: grid; grid-template-columns: 1fr 1fr auto; gap: 18px; align-items: start; }
+.cycle-row-metrics .mbar { margin: 4px 0; }
+.cm-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.3px; color: var(--text-dim); font-weight: 700; }
+.cm-value { font-size: 12.5px; font-variant-numeric: tabular-nums; }
+.cm-counts { display: flex; gap: 6px; flex-wrap: wrap; align-content: start; }
+.cm-counts .badge { font-size: 11px; }
+@media (max-width: 640px) {
+  .cycle-row-metrics { grid-template-columns: 1fr; }
+}
 
 .mbar { height: 8px; border-radius: 999px; background: var(--surface-3); overflow: hidden; }
 .mbar span { display: block; height: 100%; border-radius: 999px; transition: width 0.4s ease; min-width: 2px; }
@@ -241,6 +274,7 @@ code, .key { font-family: var(--mono); }
   grid-template-columns: minmax(150px, 1.4fr) minmax(80px, 2fr) minmax(96px, auto);
   gap: 14px;
   align-items: center;
+  justify-content: normal;
   width: 100%;
   padding: 10px 6px;
   border: none;
