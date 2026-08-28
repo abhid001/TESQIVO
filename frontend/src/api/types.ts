@@ -7,6 +7,22 @@ export interface Me {
   memberships: { project_id: string; project_key: string; role: string }[];
 }
 
+export interface InstanceUser {
+  id: string;
+  username: string;
+  email: string;
+  display_name: string;
+  is_system_admin: boolean;
+  status: string;
+}
+
+export interface Member {
+  user_id: string;
+  username: string;
+  role: string;
+  status: string;
+}
+
 export interface Project {
   id: string;
   key: string;

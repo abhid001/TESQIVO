@@ -198,6 +198,7 @@ code, .key { font-family: var(--mono); }
 .section-plans { --section-accent: var(--sec-plans); }
 .section-cycles { --section-accent: var(--sec-cycles); }
 .section-releases { --section-accent: var(--sec-releases); }
+.section-settings { --section-accent: var(--sec-releases); }
 .section-traceability { --section-accent: var(--sec-traceability); }
 .section-backlog { --section-accent: var(--sec-backlog); }
 
@@ -525,10 +526,10 @@ th .sort-th { padding: 10px 12px; }
 }
 .icon-btn {
   all: unset; cursor: pointer; padding: 4px 6px; border-radius: var(--radius);
-  display: inline-grid; place-items: center; color: var(--text-dim);
+  display: inline-grid; place-items: center; color: var(--text-dim); background: transparent;
 }
 .icon-btn:hover { background: var(--surface-2); color: var(--text); }
-.icon-btn.danger:hover { color: var(--danger); }
+.icon-btn.warn:hover { background: var(--danger-bg); color: var(--danger); }
 
 .section-title { display: flex; align-items: center; gap: 9px; font-size: 15px; margin: 4px 0 10px; }
 .section-title::before { content: ""; width: 9px; height: 9px; border-radius: 3px; background: var(--dot, var(--primary)); }

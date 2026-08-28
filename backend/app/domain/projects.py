@@ -122,16 +122,34 @@ async def add_member(
     ctx: Ctx,
     *,
     project_id: uuid.UUID,
-    user_id: uuid.UUID,
     role: str,
+    user_id: uuid.UUID | None = None,
+    new_user: dict | None = None,
 ) -> ProjectMembership:
+    """Add a user to a project. Either `user_id` (existing user) or `new_user`
+    (``{username, email, display_name, password}``) - a project admin can provision
+    a plain (non-system-admin) user for their project."""
     await _get_project(session, project_id)
     authz.authorize(actor, "membership.manage", project_id=project_id)
     try:
         Role(role)
     except ValueError:
         raise ValidationFailed(f"Unknown role '{role}'.") from None
-    target = await session.get(User, user_id)
+
+    if new_user is not None:
+        from app.domain.auth import provision_user
+
+        target = await provision_user(
+            session, ctx,
+            username=new_user["username"], email=new_user["email"],
+            display_name=new_user.get("display_name") or new_user["username"],
+            password=new_user["password"],
+        )
+        user_id = target.id
+    else:
+        if user_id is None:
+            raise ValidationFailed("Provide an existing user or details for a new user.")
+        target = await session.get(User, user_id)
     if target is None:
         raise ResourceNotFound("User not found.")
     if target.status == "disabled":

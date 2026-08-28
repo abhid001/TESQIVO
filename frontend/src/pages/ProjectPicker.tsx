@@ -35,11 +35,16 @@ export function ProjectPicker() {
         </div>
         <div className="page-header">
           <h2>Projects</h2>
-          {me?.is_system_admin && (
-            <button className="primary" onClick={() => setCreating(true)}>
-              + New project
-            </button>
-          )}
+          <div className="inline-actions">
+            {me?.is_system_admin && (
+              <button onClick={() => nav("/admin")}>Admin console</button>
+            )}
+            {me?.is_system_admin && (
+              <button className="primary" onClick={() => setCreating(true)}>
+                + New project
+              </button>
+            )}
+          </div>
         </div>
         {isLoading ? (
           <p>Loading…</p>

@@ -154,7 +154,7 @@ export function RepositoryPage() {
                           </button>
                         ) : (
                           <button
-                            className="icon-btn danger"
+                            className="icon-btn warn"
                             title="Archive"
                             onClick={() => setConfirm({ tc, action: "archive" })}
                           >

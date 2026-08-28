@@ -7,15 +7,17 @@ import {
   useNavigate,
   useParams,
 } from "react-router-dom";
-import { useAuth } from "./auth/AuthContext";
+import { useAuth, useRole, canManageProject } from "./auth/AuthContext";
 import { http } from "./api/client";
-import { useProjects } from "./api/hooks";
+import { useProject, useProjects } from "./api/hooks";
 import { Logo } from "./components/Logo";
 import { Icons } from "./components/icons";
 import { LoginPage } from "./pages/LoginPage";
 import { SetupPage } from "./pages/SetupPage";
 import { ChangePasswordPage } from "./pages/ChangePasswordPage";
 import { ProjectPicker } from "./pages/ProjectPicker";
+import { AdminConsole } from "./pages/admin/AdminConsole";
+import { ProjectSettingsPage } from "./pages/ProjectSettingsPage";
 import { DashboardPage } from "./pages/DashboardPage";
 import { RepositoryPage } from "./pages/RepositoryPage";
 import { TestCasePage } from "./pages/TestCasePage";
@@ -36,15 +38,23 @@ const TABS = [
   { to: "backlog", label: "Requirements & Defects", section: "backlog", accent: "var(--sec-backlog)", icon: Icons.backlog },
 ] as const;
 
+const SETTINGS_TAB = {
+  to: "settings", label: "Settings", section: "settings",
+  accent: "var(--sec-releases)", icon: Icons.settings,
+} as const;
+
 function Shell() {
   const { projectKey } = useParams();
   const { me, logout } = useAuth();
   const nav = useNavigate();
   const loc = useLocation();
   const projects = useProjects();
+  const { project } = useProject(projectKey);
+  const role = useRole(project?.id);
 
+  const tabs = canManageProject(role) ? [...TABS, SETTINGS_TAB] : TABS;
   const current =
-    TABS.find((t) => loc.pathname.includes(`/${t.to}`)) ?? TABS[0];
+    tabs.find((t) => loc.pathname.includes(`/${t.to}`)) ?? tabs[0];
 
   return (
     <div className="app">
@@ -68,6 +78,9 @@ function Shell() {
         </select>
         <div className="spacer" />
         <div className="user">
+          {me?.is_system_admin && (
+            <button className="sm" onClick={() => nav("/admin")}>Admin console</button>
+          )}
           <span>{me?.display_name}</span>
           <button className="sm" onClick={() => void logout()}>
             Sign out
@@ -76,7 +89,7 @@ function Shell() {
       </header>
 
       <nav className="tabbar" aria-label="Sections">
-        {TABS.map((t) => {
+        {tabs.map((t) => {
           const active = current.to === t.to;
           return (
             <button
@@ -105,6 +118,7 @@ function Shell() {
           <Route path="releases" element={<ReleasesPage />} />
           <Route path="traceability" element={<TraceabilityPage />} />
           <Route path="backlog" element={<BacklogPage />} />
+          <Route path="settings" element={<ProjectSettingsPage />} />
           <Route path="*" element={<Navigate to="dashboard" replace />} />
         </Routes>
       </main>
@@ -130,7 +144,9 @@ export function App() {
 
   return (
     <Routes>
-      <Route path="/" element={<ProjectPicker />} />
+      <Route path="/" element={me.is_system_admin ? <Navigate to="/admin" replace /> : <ProjectPicker />} />
+      <Route path="/projects" element={<ProjectPicker />} />
+      <Route path="/admin/*" element={<AdminConsole />} />
       <Route path="/p/:projectKey/*" element={<Shell />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

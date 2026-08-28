@@ -13,6 +13,21 @@ interface AuthState {
 const Ctx = createContext<AuthState>(null as unknown as AuthState);
 export const useAuth = () => useContext(Ctx);
 
+/** The current user's role in a project, or "system_admin", or null. */
+export function useRole(projectId: string | undefined): string | null {
+  const { me } = useAuth();
+  if (!me || !projectId) return null;
+  if (me.is_system_admin) return "system_admin";
+  return me.memberships.find((m) => m.project_id === projectId)?.role ?? null;
+}
+
+export function canManageProject(role: string | null): boolean {
+  return role === "system_admin" || role === "project_admin";
+}
+export function canAuthor(role: string | null): boolean {
+  return role === "system_admin" || role === "project_admin" || role === "test_manager";
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [me, setMe] = useState<Me | null>(null);
   const [loading, setLoading] = useState(true);

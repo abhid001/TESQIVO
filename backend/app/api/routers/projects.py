@@ -32,9 +32,17 @@ class CreateProjectRequest(BaseModel):
     timezone: str = "UTC"
 
 
+class NewUser(BaseModel):
+    username: str = Field(min_length=3, max_length=64)
+    email: str
+    display_name: str = ""
+    password: str = Field(min_length=12, max_length=256)
+
+
 class MemberRequest(BaseModel):
-    user_id: str
     role: str
+    user_id: str | None = None
+    new_user: NewUser | None = None
 
 
 class ReferenceRequest(BaseModel):
@@ -88,6 +96,20 @@ async def get_project(project_id: str, actor: CurrentActor, db: DbSession) -> Pr
     return _out(project)
 
 
+class ArchiveRequest(BaseModel):
+    expected_version: int
+
+
+@router.post("/{project_id}/archive", response_model=ProjectOut)
+async def archive_project(
+    project_id: str, body: ArchiveRequest, actor: CurrentActor, db: DbSession, ctx: RequestCtx
+) -> ProjectOut:
+    project = await projects.archive_project(
+        db, actor, ctx, project_id=uuid.UUID(project_id), expected_version=body.expected_version
+    )
+    return _out(project)
+
+
 class MembershipOut(BaseModel):
     user_id: str
     username: str
@@ -117,7 +139,9 @@ async def add_member(
     project_id: str, body: MemberRequest, actor: CurrentActor, db: DbSession, ctx: RequestCtx
 ) -> MembershipOut:
     m = await projects.add_member(
-        db, actor, ctx, project_id=uuid.UUID(project_id), user_id=uuid.UUID(body.user_id), role=body.role
+        db, actor, ctx, project_id=uuid.UUID(project_id), role=body.role,
+        user_id=uuid.UUID(body.user_id) if body.user_id else None,
+        new_user=body.new_user.model_dump() if body.new_user else None,
     )
     u = await db.get(User, m.user_id)
     return MembershipOut(user_id=str(m.user_id), username=u.username if u else "", role=m.role, status=m.status)

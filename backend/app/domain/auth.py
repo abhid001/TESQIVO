@@ -228,6 +228,48 @@ def _validate_password(password: str) -> None:
         )
 
 
+async def _create_user_row(
+    session: AsyncSession, *, username: str, email: str, display_name: str,
+    password: str, is_system_admin: bool = False,
+) -> User:
+    _validate_password(password)
+    existing = await session.scalar(
+        select(User).where(
+            (func.lower(User.username) == username.strip().lower())
+            | (func.lower(User.email) == email.strip().lower())
+        )
+    )
+    if existing is not None:
+        raise ValidationFailed("A user with that username or email already exists.")
+    user = User(
+        username=username.strip(),
+        email=email.strip().lower(),
+        display_name=display_name.strip() or username,
+        password_hash=hash_password(password),
+        is_system_admin=is_system_admin,
+        status="active",
+    )
+    session.add(user)
+    await session.flush()
+    return user
+
+
+async def provision_user(
+    session: AsyncSession, ctx: Ctx, *, username: str, email: str, display_name: str, password: str
+) -> User:
+    """Create a plain (non-admin) user. Authorization is the caller's responsibility
+    (e.g. a project admin adding a member)."""
+    user = await _create_user_row(
+        session, username=username, email=email, display_name=display_name,
+        password=password, is_system_admin=False,
+    )
+    audit.record(
+        session, actor=Actor.system(), ctx=ctx, entity_type="user", action="user.provisioned",
+        entity_id=user.id, after={"username": user.username},
+    )
+    return user
+
+
 async def create_user(
     session: AsyncSession,
     actor: Actor,
