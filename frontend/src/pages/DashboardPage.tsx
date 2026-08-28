@@ -15,6 +15,7 @@ import type {
 } from "../api/types";
 import { Badge, Card, EmptyState } from "../ui";
 import { DrillDownDialog } from "../components/DrillDownDialog";
+import { CoverageBars, Donut } from "../components/Charts";
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? "/api/v1";
 
@@ -35,7 +36,6 @@ const META: Record<string, { name: string; help: string; accent: string }> = {
   "M-13": { name: "Trace-link health", help: "Resolvable ÷ total active trace links.", accent: "var(--sec-backlog)" },
 };
 
-const COVERAGE = ["M-05", "M-06", "M-07", "M-08", "M-09"];
 const EXECUTION = ["M-01", "M-02", "M-03", "M-04"];
 const QUALITY = ["M-10", "M-11", "M-12", "M-13"];
 
@@ -190,33 +190,26 @@ function ReleaseRollup({
 function CoverageTypeCard({ cbt }: { cbt: CoverageByType }) {
   const t = cbt.tests;
   const rc = cbt.requirement_coverage;
-  const autoW = t.total ? (t.automated / t.total) * 100 : 0;
-  const manW = t.total ? (t.manual / t.total) * 100 : 0;
-  const naW = t.total ? (t.not_applicable / t.total) * 100 : 0;
   return (
-    <div className="stack">
-      <div>
-        <div className="cm-label">Repository mix ({t.total} approved/active tests)</div>
-        <div className="stack-bar">
-          <span style={{ width: `${autoW}%`, background: "var(--sec-backlog)" }} title={`${t.automated} automated`} />
-          <span style={{ width: `${manW}%`, background: "var(--sec-cycles)" }} title={`${t.manual} manual`} />
-          <span style={{ width: `${naW}%`, background: "var(--surface-3)" }} title={`${t.not_applicable} not applicable`} />
-        </div>
-        <div className="inline-actions" style={{ marginTop: 6 }}>
-          <span className="badge" style={{ color: "var(--sec-backlog)" }}>{t.automated} automated</span>
-          <span className="badge" style={{ color: "var(--sec-cycles)" }}>{t.manual} manual</span>
-          <span className="badge">{t.not_applicable} N/A</span>
-        </div>
-      </div>
+    <div className="stack viz">
+      <Donut
+        centerLabel="active tests"
+        centerValue={String(t.total)}
+        segments={[
+          { label: "Automated", value: t.automated, varName: "--viz-cat-1" },
+          { label: "Manual", value: t.manual, varName: "--viz-cat-2" },
+          { label: "Not applicable", value: t.not_applicable, varName: "--viz-cat-3" },
+        ]}
+      />
       <div className="metric-list">
         <div className="metric-row" style={{ cursor: "default" }}>
           <div className="metric-row-label">Requirements covered by an automated test</div>
-          <Bar value={rc.automated_ratio} accent="var(--sec-backlog)" />
+          <Bar value={rc.automated_ratio} accent="var(--viz-cat-1)" />
           <div className="metric-row-value">{pct(rc.automated_ratio)} <span className="muted">· {rc.covered_by_automated}/{rc.active_requirements}</span></div>
         </div>
         <div className="metric-row" style={{ cursor: "default" }}>
           <div className="metric-row-label">Requirements covered by a manual test</div>
-          <Bar value={rc.manual_ratio} accent="var(--sec-cycles)" />
+          <Bar value={rc.manual_ratio} accent="var(--viz-cat-2)" />
           <div className="metric-row-value">{pct(rc.manual_ratio)} <span className="muted">· {rc.covered_by_manual}/{rc.active_requirements}</span></div>
         </div>
       </div>
@@ -367,25 +360,50 @@ export function DashboardPage() {
             />
           </Card>
 
-          <Card>
-            <h3 className="section-title" style={{ ["--dot" as string]: META["M-05"].accent }}>
-              Requirement coverage
-            </h3>
-            <div className="metric-list">
-              {COVERAGE.filter((id) => byId[id]).map((id) => (
-                <MetricRow key={id} m={byId[id]} onOpen={() => setOpenMetric(id)} />
-              ))}
-            </div>
-          </Card>
-
-          {coverageType.data && (
+          <div className="two-col">
             <Card>
-              <h3 className="section-title" style={{ ["--dot" as string]: "var(--sec-backlog)" }}>
-                Manual vs automated coverage
+              <h3 className="section-title" style={{ ["--dot" as string]: META["M-05"].accent }}>
+                Requirement coverage
               </h3>
-              <CoverageTypeCard cbt={coverageType.data} />
+              <CoverageBars
+                data={[
+                  { id: "M-05", name: "Design" },
+                  { id: "M-06", name: "Plan" },
+                  { id: "M-07", name: "Execution" },
+                  { id: "M-08", name: "Pass" },
+                ]
+                  .filter((s) => byId[s.id])
+                  .map((s) => ({
+                    label: s.name,
+                    value: byId[s.id].value,
+                    sub:
+                      byId[s.id].denominator !== null
+                        ? `${byId[s.id].numerator}/${byId[s.id].denominator}`
+                        : undefined,
+                    onClick: () => setOpenMetric(s.id),
+                  }))}
+              />
+              {byId["M-09"] && (
+                <button className="metric-row" style={{ marginTop: 8 }} onClick={() => setOpenMetric("M-09")}>
+                  <div className="metric-row-label">
+                    Requirements with no test <span className="mtag">M-09</span>
+                    <span className="drill-hint">↗</span>
+                  </div>
+                  <div />
+                  <div className="metric-row-value">{byId["M-09"].display}</div>
+                </button>
+              )}
             </Card>
-          )}
+
+            {coverageType.data && (
+              <Card>
+                <h3 className="section-title" style={{ ["--dot" as string]: "var(--sec-backlog)" }}>
+                  Automation coverage
+                </h3>
+                <CoverageTypeCard cbt={coverageType.data} />
+              </Card>
+            )}
+          </div>
 
           <Card>
             <h3 className="section-title" style={{ ["--dot" as string]: META["M-02"].accent }}>
