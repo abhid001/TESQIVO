@@ -39,6 +39,7 @@ class Actor:
     username: str
     display_name: str
     is_system_admin: bool
+    must_change_password: bool = False
     memberships: dict[uuid.UUID, Membership] = field(default_factory=dict)
 
     def membership(self, project_id: uuid.UUID) -> Membership | None:

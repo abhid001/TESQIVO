@@ -40,6 +40,14 @@ class Settings(BaseSettings):
     export_sync_row_limit: int = 5000
     environment: str = "production"
 
+    # --- optional outbound email (self-service password reset) ---
+    smtp_host: str | None = None
+    smtp_port: int = 587
+    smtp_user: str | None = None
+    smtp_password: str | None = None
+    smtp_from: str | None = None
+    smtp_starttls: bool = True
+
     @field_validator("secret_key")
     @classmethod
     def _secret_len(cls, v: str) -> str:
@@ -57,6 +65,10 @@ class Settings(BaseSettings):
     @property
     def is_test(self) -> bool:
         return self.environment == "test"
+
+    @property
+    def email_enabled(self) -> bool:
+        return bool(self.smtp_host and self.smtp_from)
 
 
 @lru_cache

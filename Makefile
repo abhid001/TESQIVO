@@ -15,6 +15,12 @@ fmt: ## Format the backend
 up: ## Start the full stack (Docker Compose)
 	docker compose up -d --build
 
+seed: ## Load demo data (PASSWORD=... [USER=admin] [BASE=http://localhost:8080])
+	@test -n "$(PASSWORD)" || (echo "usage: make seed PASSWORD=<admin password>"; exit 1)
+	backend/.venv/bin/python scripts/seed_demo.py \
+		--base $(or $(BASE),http://localhost:8080) \
+		--user $(or $(USER),admin) --password '$(PASSWORD)'
+
 down: ## Stop the stack
 	docker compose down
 

@@ -14,13 +14,15 @@ export function Card({
   children,
   className = "",
   style,
+  title,
 }: {
   children: ReactNode;
   className?: string;
   style?: CSSProperties;
+  title?: string;
 }) {
   return (
-    <div className={`card ${className}`} style={style}>
+    <div className={`card ${className}`} style={style} title={title}>
       {children}
     </div>
   );

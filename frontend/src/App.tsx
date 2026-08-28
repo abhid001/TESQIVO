@@ -14,6 +14,7 @@ import { Logo } from "./components/Logo";
 import { Icons } from "./components/icons";
 import { LoginPage } from "./pages/LoginPage";
 import { SetupPage } from "./pages/SetupPage";
+import { ChangePasswordPage } from "./pages/ChangePasswordPage";
 import { ProjectPicker } from "./pages/ProjectPicker";
 import { DashboardPage } from "./pages/DashboardPage";
 import { RepositoryPage } from "./pages/RepositoryPage";
@@ -122,6 +123,7 @@ export function App() {
   if (loading || needsSetup === null) return <div className="centered">Loading…</div>;
   if (needsSetup) return <SetupPage onDone={() => setNeedsSetup(false)} />;
   if (!me) return <LoginPage />;
+  if (me.must_change_password) return <ChangePasswordPage forced />;
 
   return (
     <Routes>

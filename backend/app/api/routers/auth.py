@@ -28,6 +28,7 @@ class MeOut(BaseModel):
     username: str
     display_name: str
     is_system_admin: bool
+    must_change_password: bool
     memberships: list[MembershipOut]
 
 
@@ -85,12 +86,49 @@ async def complete_password_reset(
     await auth.complete_password_reset(db, ctx, token=body.token, new_password=body.new_password)
 
 
+class PasswordResetRequest(BaseModel):
+    identifier: str = Field(min_length=1, max_length=320, description="Username or email")
+
+
+class PasswordResetRequestOut(BaseModel):
+    outcome: str
+    message: str
+    email_configured: bool
+
+
+@router.post("/password-reset/request", response_model=PasswordResetRequestOut)
+async def request_password_reset(
+    body: PasswordResetRequest, db: DbSession, ctx: RequestCtx
+) -> PasswordResetRequestOut:
+    outcome, message = await auth.request_password_reset(db, ctx, identifier=body.identifier)
+    return PasswordResetRequestOut(
+        outcome=outcome, message=message, email_configured=get_settings().email_enabled
+    )
+
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str = Field(min_length=1, max_length=256)
+    new_password: str = Field(min_length=12, max_length=256)
+
+
+@router.post("/password", status_code=204)
+async def change_password(
+    body: ChangePasswordRequest, actor: CurrentActor, db: DbSession, ctx: RequestCtx
+):
+    await auth.change_own_password(
+        db, actor, ctx,
+        current_password=body.current_password,
+        new_password=body.new_password,
+    )
+
+
 def _me(actor) -> MeOut:
     return MeOut(
         id=str(actor.id),
         username=actor.username,
         display_name=actor.display_name,
         is_system_admin=actor.is_system_admin,
+        must_change_password=actor.must_change_password,
         memberships=[
             MembershipOut(project_id=str(m.project_id), project_key=m.project_key, role=m.role.value)
             for m in actor.memberships.values()

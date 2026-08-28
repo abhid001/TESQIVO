@@ -196,6 +196,7 @@ async def load_actor(session: AsyncSession, user_id: uuid.UUID) -> Actor:
         username=user.username,
         display_name=user.display_name,
         is_system_admin=user.is_system_admin,
+        must_change_password=user.must_change_password,
         memberships=memberships,
     )
 
@@ -206,6 +207,7 @@ def _bare_actor(user: User) -> Actor:
         username=user.username,
         display_name=user.display_name,
         is_system_admin=user.is_system_admin,
+        must_change_password=user.must_change_password,
     )
 
 
@@ -353,6 +355,7 @@ async def complete_password_reset(
         .where(UserSession.user_id == user.id, UserSession.revoked_at.is_(None))
         .values(revoked_at=_now())
     )
+    user.must_change_password = False
     audit.record(
         session,
         actor=_bare_actor(user),
@@ -360,5 +363,148 @@ async def complete_password_reset(
         entity_type="user",
         action="user.password_reset_completed",
         entity_id=user.id,
+    )
+    await session.commit()
+
+
+# --- self-service "forgot password" (decision D-019) ---
+
+_TEMP_PW_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789"
+
+
+def _generate_temp_password(length: int = 16) -> str:
+    # Always satisfies the password policy (mixed case + digit, >= 12).
+    body = "".join(secrets.choice(_TEMP_PW_ALPHABET) for _ in range(length - 3))
+    return (
+        secrets.choice("ABCDEFGHJKLMNPQRSTUVWXYZ")
+        + secrets.choice("abcdefghijkmnpqrstuvwxyz")
+        + secrets.choice("23456789")
+        + body
+    )
+
+
+class ResetOutcome:
+    EMAIL_SENT = "email_sent"
+    EMAIL_UNAVAILABLE = "email_unavailable"
+    CONTACT_MAINTAINER = "contact_maintainer"
+
+
+_OUTCOME_MESSAGES = {
+    ResetOutcome.EMAIL_SENT: (
+        "If an account matches that username or email, a temporary password has been "
+        "sent to the address on file. Sign in with it, then choose a new password."
+    ),
+    ResetOutcome.EMAIL_UNAVAILABLE: (
+        "Password reset by email is not configured on this server. Contact your "
+        "administrator to have your password reset."
+    ),
+    ResetOutcome.CONTACT_MAINTAINER: (
+        "Administrator accounts cannot be reset from this screen. Contact the person "
+        "who maintains this TESQIVO instance."
+    ),
+}
+
+
+async def request_password_reset(
+    session: AsyncSession, ctx: Ctx, *, identifier: str
+) -> tuple[str, str]:
+    """User-initiated forgot-password. Returns (outcome_code, message).
+
+    The response never confirms whether a normal account exists. Administrator
+    accounts always get CONTACT_MAINTAINER (they must not be reset without a human
+    in the loop). When SMTP is not configured, everyone is told to contact an
+    administrator.
+    """
+    from app.core.mailer import get_mailer
+
+    settings = get_settings()
+    ident = identifier.strip().lower()
+    user = await session.scalar(
+        select(User).where(
+            (func.lower(User.username) == ident) | (func.lower(User.email) == ident)
+        )
+    )
+
+    if user is not None and user.is_system_admin:
+        return ResetOutcome.CONTACT_MAINTAINER, _OUTCOME_MESSAGES[ResetOutcome.CONTACT_MAINTAINER]
+
+    if not settings.email_enabled:
+        audit.record(
+            session, actor=Actor.system(), ctx=ctx, entity_type="user",
+            action="user.password_reset_requested_email_unavailable",
+            entity_id=user.id if user else None,
+        )
+        await session.commit()
+        return (
+            ResetOutcome.EMAIL_UNAVAILABLE,
+            _OUTCOME_MESSAGES[ResetOutcome.EMAIL_UNAVAILABLE],
+        )
+
+    # Email is configured. Only act for a real, active, non-admin account; otherwise
+    # return the same generic message so account existence is not disclosed.
+    if user is not None and user.status == "active":
+        temp = _generate_temp_password()
+        user.password_hash = hash_password(temp)
+        user.must_change_password = True
+        user.failed_login_count = 0
+        user.locked_until = None
+        await session.execute(
+            UserSession.__table__.update()
+            .where(UserSession.user_id == user.id, UserSession.revoked_at.is_(None))
+            .values(revoked_at=_now())
+        )
+        audit.record(
+            session, actor=Actor.system(), ctx=ctx, entity_type="user",
+            action="user.password_reset_email_sent", entity_id=user.id,
+        )
+        await session.commit()
+        try:
+            await get_mailer().send(
+                to=user.email,
+                subject="TESQIVO temporary password",
+                body=(
+                    f"Hello {user.display_name},\n\n"
+                    "A password reset was requested for your TESQIVO account.\n\n"
+                    f"Temporary password: {temp}\n\n"
+                    f"Sign in at {settings.public_url} with this temporary password. "
+                    "You will be asked to set a new password immediately.\n\n"
+                    "If you did not request this, contact your administrator - your "
+                    "previous password no longer works.\n"
+                ),
+            )
+        except Exception:  # noqa: BLE001
+            log = __import__("logging").getLogger("tesqivo.mailer")
+            log.exception("failed to send password-reset email")
+    else:
+        audit.record(
+            session, actor=Actor.system(), ctx=ctx, entity_type="user",
+            action="user.password_reset_requested_no_match", entity_id=None,
+        )
+        await session.commit()
+
+    return ResetOutcome.EMAIL_SENT, _OUTCOME_MESSAGES[ResetOutcome.EMAIL_SENT]
+
+
+async def change_own_password(
+    session: AsyncSession,
+    actor: Actor,
+    ctx: Ctx,
+    *,
+    current_password: str,
+    new_password: str,
+) -> None:
+    user = await session.get(User, actor.id)
+    if user is None:
+        raise ResourceNotFound("User not found.")
+    if not verify_password(current_password, user.password_hash):
+        raise InvalidCredentials("Your current password is incorrect.")
+    _validate_password(new_password)
+    if verify_password(new_password, user.password_hash):
+        raise ValidationFailed("The new password must be different from the current one.")
+    user.password_hash = hash_password(new_password)
+    user.must_change_password = False
+    audit.record(
+        session, actor=actor, ctx=ctx, entity_type="user",
+        action="user.password_changed", entity_id=user.id,
     )
     await session.commit()

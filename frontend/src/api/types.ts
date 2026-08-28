@@ -3,6 +3,7 @@ export interface Me {
   username: string;
   display_name: string;
   is_system_admin: boolean;
+  must_change_password: boolean;
   memberships: { project_id: string; project_key: string; role: string }[];
 }
 

@@ -42,6 +42,7 @@ class User(UUIDMixin, TimestampMixin, Base):
     status: Mapped[str] = mapped_column(String(16), default="active", nullable=False)  # active|disabled
     failed_login_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     locked_until: Mapped[datetime | None] = mapped_column(UTCDateTime)
+    must_change_password: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     version: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
 
     __table_args__ = (
