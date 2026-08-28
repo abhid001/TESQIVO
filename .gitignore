@@ -30,3 +30,6 @@ frontend/dist/
 .DS_Store
 frontend/dist/
 frontend/shots.mjs
+
+# local cloudflare quick tunnel
+.tunnel/
