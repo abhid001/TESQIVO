@@ -8,7 +8,7 @@ from sqlalchemy import select
 
 from app.api.deps import CurrentActor, DbSession, RequestCtx
 from app.core.errors import Forbidden
-from app.domain import auth
+from app.domain import access, auth
 from app.models import User
 
 router = APIRouter(prefix="/users", tags=["users"])
@@ -86,6 +86,28 @@ async def set_status(
         db, actor, ctx, user_id=uuid.UUID(user_id), status=body.status
     )
     return _out(user)
+
+
+class UserMembershipOut(BaseModel):
+    project_id: str
+    project_key: str
+    project_name: str
+    role: str
+
+
+@router.get("/{user_id}/memberships", response_model=list[UserMembershipOut])
+async def user_memberships(
+    user_id: str, actor: CurrentActor, db: DbSession
+) -> list[UserMembershipOut]:
+    import uuid
+
+    rows = await access.user_memberships(db, actor, user_id=uuid.UUID(user_id))
+    return [
+        UserMembershipOut(
+            project_id=str(p.id), project_key=p.key, project_name=p.name, role=m.role
+        )
+        for (m, p) in rows
+    ]
 
 
 @router.post("/{user_id}/password-reset", response_model=ResetOut, status_code=201)

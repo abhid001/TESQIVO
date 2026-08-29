@@ -36,7 +36,6 @@ const META: Record<string, { name: string; help: string; accent: string }> = {
   "M-13": { name: "Trace-link health", help: "Resolvable ÷ total active trace links.", accent: "var(--sec-backlog)" },
 };
 
-const EXECUTION = ["M-01", "M-02", "M-03", "M-04"];
 const QUALITY = ["M-10", "M-11", "M-12", "M-13"];
 
 function relTime(iso: string): string {
@@ -52,33 +51,6 @@ function Bar({ value, accent }: { value: number | null; accent: string }) {
     <div className="mbar">
       <span style={{ width: `${Math.round(value * 100)}%`, background: accent }} />
     </div>
-  );
-}
-
-function Headline({ m, onOpen, invert = false }: { m: Metric; onOpen: () => void; invert?: boolean }) {
-  const meta = META[m.metric_id];
-  const good = m.kind === "count" ? (invert ? m.value === 0 : true) : (m.value ?? 0) >= 0.8;
-  return (
-    <button
-      className="card headline"
-      title={`${meta.help}\nClick to see the records`}
-      onClick={onOpen}
-    >
-      <div className="headline-value" style={{ color: invert && m.value ? "var(--danger)" : undefined }}>
-        {m.display}
-      </div>
-      <div className="headline-name">
-        {meta.name} <span className="drill-hint">↗</span>
-      </div>
-      {m.kind === "ratio" && (
-        <>
-          <Bar value={m.value} accent={good ? "var(--success)" : meta.accent} />
-          <div className="headline-sub">
-            {m.denominator !== null ? `${m.numerator} of ${m.denominator}` : "no data in scope"}
-          </div>
-        </>
-      )}
-    </button>
   );
 }
 
@@ -220,6 +192,58 @@ function CoverageTypeCard({ cbt }: { cbt: CoverageByType }) {
   );
 }
 
+function ExecutionStatus({
+  cycles,
+  passRate,
+  completion,
+  onOpen,
+}: {
+  cycles: CycleBreakdownRow[];
+  passRate: number | null;
+  completion: number | null;
+  onOpen: (metricId: string) => void;
+}) {
+  const sum = cycles.reduce(
+    (a, c) => ({
+      passed: a.passed + c.passed,
+      failed: a.failed + c.failed,
+      blocked: a.blocked + c.blocked,
+      not_run: a.not_run + c.not_run,
+    }),
+    { passed: 0, failed: 0, blocked: 0, not_run: 0 },
+  );
+  const total = sum.passed + sum.failed + sum.blocked + sum.not_run;
+  if (total === 0) {
+    return <p className="muted">No cycles in scope yet. Create a plan and a cycle to track execution.</p>;
+  }
+  return (
+    <div className="stack viz">
+      <Donut
+        centerLabel="scoped tests"
+        centerValue={String(total)}
+        segments={[
+          { label: "Passed", value: sum.passed, varName: "--viz-pass" },
+          { label: "Failed", value: sum.failed, varName: "--viz-fail" },
+          { label: "Blocked", value: sum.blocked, varName: "--viz-block" },
+          { label: "Not run", value: sum.not_run, varName: "--viz-notrun" },
+        ]}
+      />
+      <div className="metric-list">
+        <button className="metric-row" onClick={() => onOpen("M-03")}>
+          <div className="metric-row-label">Pass rate <span className="mtag">M-03</span><span className="drill-hint">↗</span></div>
+          <Bar value={passRate} accent={(passRate ?? 0) >= 0.8 ? "var(--success)" : "var(--sec-cycles)"} />
+          <div className="metric-row-value">{pct(passRate)}</div>
+        </button>
+        <button className="metric-row" onClick={() => onOpen("M-02")}>
+          <div className="metric-row-label">Execution complete <span className="mtag">M-02</span><span className="drill-hint">↗</span></div>
+          <Bar value={completion} accent="var(--sec-repository)" />
+          <div className="metric-row-value">{pct(completion)}</div>
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function MetricRow({ m, onOpen }: { m: Metric; onOpen: () => void }) {
   const meta = META[m.metric_id];
   return (
@@ -337,28 +361,9 @@ export function DashboardPage() {
 
       {summary.data && (
         <div className="stack">
-          <p className="muted" style={{ fontSize: 12.5 }} title={`formula v${summary.data.formula_version}`}>
-            Updated {relTime(summary.data.data_as_of)} · every number links to its underlying records
+          <p className="muted small" title={`formula v${summary.data.formula_version}`}>
+            Updated {relTime(summary.data.data_as_of)} · click any chart or figure to see its records
           </p>
-
-          <div className="headline-grid">
-            {byId["M-05"] && <Headline m={byId["M-05"]} onOpen={() => setOpenMetric("M-05")} />}
-            {byId["M-02"] && <Headline m={byId["M-02"]} onOpen={() => setOpenMetric("M-02")} />}
-            {byId["M-03"] && <Headline m={byId["M-03"]} onOpen={() => setOpenMetric("M-03")} />}
-            {byId["M-10"] && <Headline m={byId["M-10"]} onOpen={() => setOpenMetric("M-10")} invert />}
-          </div>
-
-          <Card>
-            <h3 className="section-title" style={{ ["--dot" as string]: "var(--sec-releases)" }}>
-              Releases
-            </h3>
-            <ReleaseRollup
-              rows={relRows}
-              activeReleaseId={releaseId}
-              onPickRelease={(id) => { setReleaseId(id); setCycleId(""); }}
-              onOpenCycles={() => nav(`/p/${projectKey}/cycles`)}
-            />
-          </Card>
 
           <div className="two-col">
             <Card>
@@ -405,36 +410,54 @@ export function DashboardPage() {
             )}
           </div>
 
+          <div className="two-col">
+            <Card>
+              <h3 className="section-title" style={{ ["--dot" as string]: META["M-02"].accent }}>
+                Execution status
+              </h3>
+              <ExecutionStatus
+                cycles={breakdown.data?.cycles ?? []}
+                passRate={byId["M-03"]?.value ?? null}
+                completion={byId["M-02"]?.value ?? null}
+                onOpen={setOpenMetric}
+              />
+            </Card>
+
+            <Card>
+              <h3 className="section-title" style={{ ["--dot" as string]: META["M-10"].accent }}>
+                Quality signals
+              </h3>
+              <div className="metric-list">
+                {QUALITY.filter((id) => byId[id]).map((id) => (
+                  <MetricRow key={id} m={byId[id]} onOpen={() => setOpenMetric(id)} />
+                ))}
+              </div>
+            </Card>
+          </div>
+
           <Card>
-            <h3 className="section-title" style={{ ["--dot" as string]: META["M-02"].accent }}>
-              Execution progress by cycle
+            <h3 className="section-title" style={{ ["--dot" as string]: "var(--sec-cycles)" }}>
+              Execution by cycle
             </h3>
             <CycleBreakdown
               rows={breakdown.data?.cycles ?? []}
               onOpenCycle={() => nav(`/p/${projectKey}/cycles`)}
             />
-            {(breakdown.data?.cycles.length ?? 0) > 0 && (
-              <>
-                <div className="metric-sub-title">Across all cycles in scope</div>
-                <div className="metric-list">
-                  {EXECUTION.filter((id) => byId[id]).map((id) => (
-                    <MetricRow key={id} m={byId[id]} onOpen={() => setOpenMetric(id)} />
-                  ))}
-                </div>
-              </>
-            )}
           </Card>
 
-          <Card>
-            <h3 className="section-title" style={{ ["--dot" as string]: META["M-10"].accent }}>
-              Quality signals
-            </h3>
-            <div className="metric-list">
-              {QUALITY.filter((id) => byId[id]).map((id) => (
-                <MetricRow key={id} m={byId[id]} onOpen={() => setOpenMetric(id)} />
-              ))}
-            </div>
-          </Card>
+          {relRows.length > 0 && (
+            <Card>
+              <h3 className="section-title" style={{ ["--dot" as string]: "var(--sec-releases)" }}>
+                Releases
+              </h3>
+              <ReleaseRollup
+                rows={relRows}
+                activeReleaseId={releaseId}
+                onPickRelease={(id) => { setReleaseId(id); setCycleId(""); }}
+                onOpenCycles={() => nav(`/p/${projectKey}/cycles`)}
+              />
+            </Card>
+          )}
 
           {summary.data.metrics.length === 0 && (
             <EmptyState>

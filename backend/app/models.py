@@ -126,6 +126,51 @@ class ProjectMembership(UUIDMixin, Base):
     )
 
 
+class ProjectAccessRequest(UUIDMixin, TimestampMixin, Base):
+    """A user asking to be granted membership in a project they can see but aren't in."""
+
+    __tablename__ = "project_access_request"
+
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("app_user.id"), nullable=False, index=True)
+    project_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("project.id"), nullable=False, index=True)
+    requested_role: Mapped[str] = mapped_column(String(20), default="tester", nullable=False)
+    message: Mapped[str | None] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(String(16), default="pending", nullable=False)
+    decided_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("app_user.id"))
+    decided_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
+
+    __table_args__ = (
+        CheckConstraint(
+            "status in ('pending','approved','denied')", name="access_request_status_valid"
+        ),
+    )
+
+
+class Feedback(UUIDMixin, TimestampMixin, Base):
+    """Product feedback from any signed-in user; triaged by a system administrator."""
+
+    __tablename__ = "feedback"
+
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("app_user.id"), nullable=False, index=True)
+    project_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("project.id"), index=True)
+    category: Mapped[str] = mapped_column(String(16), default="other", nullable=False)
+    message: Mapped[str] = mapped_column(Text, nullable=False)
+    page_path: Mapped[str | None] = mapped_column(String(400))
+    status: Mapped[str] = mapped_column(String(16), default="open", nullable=False)
+    admin_note: Mapped[str | None] = mapped_column(Text)
+    resolved_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("app_user.id"))
+    resolved_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
+
+    __table_args__ = (
+        CheckConstraint(
+            "category in ('bug','idea','question','other')", name="feedback_category_valid"
+        ),
+        CheckConstraint(
+            "status in ('open','reviewing','resolved')", name="feedback_status_valid"
+        ),
+    )
+
+
 class ReferenceValue(UUIDMixin, TimestampMixin, Base):
     __tablename__ = "reference_value"
 

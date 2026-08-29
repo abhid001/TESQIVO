@@ -196,6 +196,7 @@ async def load_actor(session: AsyncSession, user_id: uuid.UUID) -> Actor:
         username=user.username,
         display_name=user.display_name,
         is_system_admin=user.is_system_admin,
+        email=user.email,
         must_change_password=user.must_change_password,
         memberships=memberships,
     )
@@ -207,6 +208,7 @@ def _bare_actor(user: User) -> Actor:
         username=user.username,
         display_name=user.display_name,
         is_system_admin=user.is_system_admin,
+        email=user.email,
         must_change_password=user.must_change_password,
     )
 

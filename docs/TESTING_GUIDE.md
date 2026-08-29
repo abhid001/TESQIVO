@@ -153,6 +153,16 @@ issued a temporary password they'll be forced to set a new one on login).
 > The tester does **not** get the bootstrap token and cannot reach the Admin
 > console — that is admin-only by design.
 
+### 7c. Self-service access (alternative)
+
+You can also just hand a tester a login with **no project** and let them request
+access themselves: **Projects → Browse all projects → Request access**. The
+request lands in **Admin console → Access requests** (or the project's
+**Settings → Pending access requests** for a project admin), where you approve it
+at a chosen role. Every signed-in user also has an account menu (top-right:
+profile, email, change password, sign out) and a **Feedback** button that sends
+straight to **Admin console → Feedback** (exportable to CSV / text).
+
 ---
 
 ## 8. (Optional) Load demo data
@@ -180,7 +190,7 @@ skips if `DEMO` already exists.
 A suggested happy-path walkthrough (project scoped, as a Test manager):
 
 1. **Sign in**, switch to the project (top-left project menu).
-2. **Requirements & Defects** → create 2–3 requirements → **Activate** them.
+2. **Requirements** → create 2–3 requirements → **Activate** them (defects live on the same tab).
 3. **Scenarios** → create a scenario, link it to a requirement.
 4. **Tests** → create a test case with steps; assign it to the scenario;
    move it through **submit for review → approve → activate** (test-case detail page).

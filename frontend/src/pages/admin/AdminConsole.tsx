@@ -1,13 +1,23 @@
-import { NavLink, Navigate, Route, Routes, useNavigate } from "react-router-dom";
+import { NavLink, Navigate, Route, Routes } from "react-router-dom";
 import { useAuth } from "../../auth/AuthContext";
 import { Logo } from "../../components/Logo";
 import { Icons } from "../../components/icons";
+import { AppMenu } from "../../components/AppMenu";
+import { FeedbackWidget } from "../../components/FeedbackWidget";
 import { AdminUsers } from "./AdminUsers";
 import { AdminProjects } from "./AdminProjects";
+import { AdminRequests } from "./AdminRequests";
+import { AdminFeedback } from "./AdminFeedback";
+
+const NAV = [
+  { to: "users", label: "Users", accent: "#0f766e", icon: Icons.admin },
+  { to: "projects", label: "Projects", accent: "#0ea5e9", icon: Icons.releases },
+  { to: "requests", label: "Access requests", accent: "#7c3aed", icon: Icons.traceability },
+  { to: "feedback", label: "Feedback", accent: "#e0812b", icon: Icons.backlog },
+];
 
 export function AdminConsole() {
-  const { me, logout } = useAuth();
-  const nav = useNavigate();
+  const { me } = useAuth();
   if (!me?.is_system_admin) return <Navigate to="/" replace />;
 
   return (
@@ -19,30 +29,32 @@ export function AdminConsole() {
             <span>TESQIVO Admin</span>
           </div>
           <div className="spacer" />
-          <div className="user">
-            <button className="sm" onClick={() => nav("/projects")}>Open a project</button>
-            <span>{me.display_name}</span>
-            <button className="sm" onClick={() => void logout()}>Sign out</button>
-          </div>
+          <AppMenu />
         </header>
         <nav className="tabbar" aria-label="Admin sections">
-          <NavLink to="/admin/users" className={({ isActive }) => `tab ${isActive ? "active" : ""}`} style={{ ["--accent" as string]: "#0f766e" }}>
-            <span className="tab-icon">{Icons.admin}</span>
-            Users
-          </NavLink>
-          <NavLink to="/admin/projects" className={({ isActive }) => `tab ${isActive ? "active" : ""}`} style={{ ["--accent" as string]: "#0ea5e9" }}>
-            <span className="tab-icon">{Icons.releases}</span>
-            Projects
-          </NavLink>
+          {NAV.map((n) => (
+            <NavLink
+              key={n.to}
+              to={`/admin/${n.to}`}
+              className={({ isActive }) => `tab ${isActive ? "active" : ""}`}
+              style={{ ["--accent" as string]: n.accent }}
+            >
+              <span className="tab-icon">{n.icon}</span>
+              {n.label}
+            </NavLink>
+          ))}
         </nav>
       </div>
       <main className="main">
         <Routes>
           <Route path="users" element={<AdminUsers />} />
           <Route path="projects" element={<AdminProjects />} />
+          <Route path="requests" element={<AdminRequests />} />
+          <Route path="feedback" element={<AdminFeedback />} />
           <Route path="*" element={<Navigate to="users" replace />} />
         </Routes>
       </main>
+      <FeedbackWidget />
     </div>
   );
 }

@@ -4,8 +4,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { http } from "../api/client";
 import { useProject } from "../api/hooks";
 import { useRole, canManageProject } from "../auth/AuthContext";
-import type { InstanceUser, Member } from "../api/types";
-import { Dialog, EmptyState, Field, errText, useToast } from "../ui";
+import type { AccessRequest, InstanceUser, Member } from "../api/types";
+import { Card, Dialog, EmptyState, Field, errText, useToast } from "../ui";
 import { SortHeader, sortBy, type SortState } from "../components/table";
 
 const ROLES = [
@@ -100,10 +100,64 @@ export function ProjectSettingsPage() {
         </table>
       </div>
 
+      {pid && <AccessRequests projectId={pid} onGranted={invalidate} />}
+
       {adding && pid && (
         <AddMemberDialog projectId={pid} onClose={() => setAdding(false)} onDone={() => { invalidate(); setAdding(false); }} />
       )}
     </>
+  );
+}
+
+function AccessRequests({ projectId, onGranted }: { projectId: string; onGranted: () => void }) {
+  const qc = useQueryClient();
+  const toast = useToast();
+  const q = useQuery({
+    queryKey: ["project-access-requests", projectId],
+    queryFn: () => http.get<AccessRequest[]>(`/projects/${projectId}/access-requests?status=pending`),
+  });
+  const decide = useMutation({
+    mutationFn: (v: { id: string; approve: boolean; role?: string }) =>
+      http.post(`/access-requests/${v.id}/decide`, { approve: v.approve, role: v.role }),
+    onSuccess: (_d, v) => {
+      qc.invalidateQueries({ queryKey: ["project-access-requests", projectId] });
+      onGranted();
+      toast(v.approve ? "Access granted" : "Request denied");
+    },
+    onError: (e) => toast(errText(e), "error"),
+  });
+
+  const rows = q.data ?? [];
+  if (rows.length === 0) return null;
+
+  return (
+    <Card style={{ marginTop: 18 }}>
+      <h3 className="section-title" style={{ ["--dot" as string]: "var(--sec-scenarios)" }}>
+        Pending access requests <span className="pill">{rows.length}</span>
+      </h3>
+      <div className="table-wrap">
+        <table>
+          <thead><tr><th>User</th><th>Wants</th><th>Note</th><th className="nowrap">Actions</th></tr></thead>
+          <tbody>
+            {rows.map((r) => (
+              <tr key={r.id}>
+                <td title={r.user_email}>{r.user_display_name} <span className="muted key">({r.username})</span></td>
+                <td className="nowrap">{r.requested_role}</td>
+                <td>{r.message || <span className="muted">—</span>}</td>
+                <td className="nowrap">
+                  <div className="inline-actions">
+                    <button className="sm primary" onClick={() => decide.mutate({ id: r.id, approve: true, role: r.requested_role })}>
+                      Approve as {r.requested_role}
+                    </button>
+                    <button className="sm" onClick={() => decide.mutate({ id: r.id, approve: false })}>Deny</button>
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </Card>
   );
 }
 

@@ -2,9 +2,58 @@ export interface Me {
   id: string;
   username: string;
   display_name: string;
+  email: string;
   is_system_admin: boolean;
   must_change_password: boolean;
   memberships: { project_id: string; project_key: string; role: string }[];
+}
+
+export interface DiscoverableProject {
+  id: string;
+  key: string;
+  name: string;
+  description: string | null;
+  is_member: boolean;
+  pending_request_role: string | null;
+}
+
+export interface AccessRequest {
+  id: string;
+  project_id: string;
+  project_key: string;
+  project_name: string;
+  user_id: string;
+  username: string;
+  user_email: string;
+  user_display_name: string;
+  requested_role: string;
+  message: string | null;
+  status: string;
+  created_at: string;
+  decided_at: string | null;
+}
+
+export interface Feedback {
+  id: string;
+  category: string;
+  message: string;
+  page_path: string | null;
+  status: string;
+  admin_note: string | null;
+  created_at: string;
+  resolved_at: string | null;
+  user_username: string;
+  user_email: string;
+  user_display_name: string;
+  project_key: string | null;
+  project_id: string | null;
+}
+
+export interface UserMembership {
+  project_id: string;
+  project_key: string;
+  project_name: string;
+  role: string;
 }
 
 export interface InstanceUser {

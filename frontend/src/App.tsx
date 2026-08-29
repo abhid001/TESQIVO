@@ -12,7 +12,11 @@ import { http } from "./api/client";
 import { useProject, useProjects } from "./api/hooks";
 import { Logo } from "./components/Logo";
 import { Icons } from "./components/icons";
+import { AppMenu } from "./components/AppMenu";
+import { FeedbackWidget } from "./components/FeedbackWidget";
+import { PlainShell } from "./components/PlainShell";
 import { LoginPage } from "./pages/LoginPage";
+import { ProfilePage } from "./pages/ProfilePage";
 import { SetupPage } from "./pages/SetupPage";
 import { ChangePasswordPage } from "./pages/ChangePasswordPage";
 import { ProjectPicker } from "./pages/ProjectPicker";
@@ -31,13 +35,13 @@ import { ReleasesPage } from "./pages/ReleasesPage";
 
 const TABS = [
   { to: "dashboard", label: "Dashboard", section: "dashboard", accent: "var(--sec-dashboard)", icon: Icons.dashboard },
-  { to: "tests", label: "Tests", section: "tests", accent: "var(--sec-repository)", icon: Icons.repository },
-  { to: "scenarios", label: "Scenarios", section: "scenarios", accent: "var(--sec-scenarios)", icon: Icons.scenarios },
+  { to: "requirements", label: "Requirements", section: "backlog", accent: "var(--sec-backlog)", icon: Icons.backlog },
   { to: "plans", label: "Plans", section: "plans", accent: "var(--sec-plans)", icon: Icons.plans },
-  { to: "cycles", label: "Cycles", section: "cycles", accent: "var(--sec-cycles)", icon: Icons.cycles },
+  { to: "scenarios", label: "Scenarios", section: "scenarios", accent: "var(--sec-scenarios)", icon: Icons.scenarios },
+  { to: "tests", label: "Tests", section: "tests", accent: "var(--sec-repository)", icon: Icons.repository },
   { to: "releases", label: "Releases", section: "releases", accent: "var(--sec-releases)", icon: Icons.releases },
+  { to: "cycles", label: "Cycles", section: "cycles", accent: "var(--sec-cycles)", icon: Icons.cycles },
   { to: "traceability", label: "Traceability", section: "traceability", accent: "var(--sec-traceability)", icon: Icons.traceability },
-  { to: "backlog", label: "Requirements & Defects", section: "backlog", accent: "var(--sec-backlog)", icon: Icons.backlog },
 ] as const;
 
 const SETTINGS_TAB = {
@@ -47,12 +51,29 @@ const SETTINGS_TAB = {
 
 function Shell() {
   const { projectKey } = useParams();
-  const { me, logout } = useAuth();
+  const { me } = useAuth();
   const nav = useNavigate();
   const loc = useLocation();
   const projects = useProjects();
   const { project } = useProject(projectKey);
   const role = useRole(project?.id);
+
+  // Logged in but not a member of this project (stale link / lost access):
+  // don't strand the user on an endless "Loading…" — send them somewhere useful.
+  if (projects.isSuccess && !project) {
+    return (
+      <PlainShell>
+        <div className="page-header"><h2>No access to “{projectKey}”</h2></div>
+        <p className="muted">
+          You’re not a member of this project, or it doesn’t exist. Pick another
+          project or request access.
+        </p>
+        <div className="inline-actions">
+          <button className="primary" onClick={() => nav("/projects")}>Go to projects</button>
+        </div>
+      </PlainShell>
+    );
+  }
 
   const tabs = canManageProject(role) ? [...TABS, SETTINGS_TAB] : TABS;
   const current =
@@ -62,10 +83,10 @@ function Shell() {
     <div className="app">
       <div className="appbar">
       <header className="topbar">
-        <div className="brand">
+        <button className="brand brand-btn" onClick={() => nav("/")} aria-label="Home">
           <Logo size={26} />
           <span>TESQIVO</span>
-        </div>
+        </button>
         <select
           className="project-chip"
           value={projectKey}
@@ -79,15 +100,10 @@ function Shell() {
           ))}
         </select>
         <div className="spacer" />
-        <div className="user">
-          {me?.is_system_admin && (
-            <button className="sm" onClick={() => nav("/admin")}>Admin console</button>
-          )}
-          <span>{me?.display_name}</span>
-          <button className="sm" onClick={() => void logout()}>
-            Sign out
-          </button>
-        </div>
+        {me?.is_system_admin && (
+          <button className="sm topbar-btn" onClick={() => nav("/admin")}>Admin console</button>
+        )}
+        <AppMenu />
       </header>
 
       <nav className="tabbar" aria-label="Sections">
@@ -121,11 +137,13 @@ function Shell() {
           <Route path="cycles/:cycleId/run" element={<CycleRunnerPage />} />
           <Route path="releases" element={<ReleasesPage />} />
           <Route path="traceability" element={<TraceabilityPage />} />
-          <Route path="backlog" element={<BacklogPage />} />
+          <Route path="requirements" element={<BacklogPage />} />
+          <Route path="backlog" element={<Navigate to="../requirements" replace />} />
           <Route path="settings" element={<ProjectSettingsPage />} />
           <Route path="*" element={<Navigate to="dashboard" replace />} />
         </Routes>
       </main>
+      <FeedbackWidget projectId={project?.id} />
     </div>
   );
 }
@@ -150,6 +168,7 @@ export function App() {
     <Routes>
       <Route path="/" element={me.is_system_admin ? <Navigate to="/admin" replace /> : <ProjectPicker />} />
       <Route path="/projects" element={<ProjectPicker />} />
+      <Route path="/profile" element={<ProfilePage />} />
       <Route path="/admin/*" element={<AdminConsole />} />
       <Route path="/p/:projectKey/*" element={<Shell />} />
       <Route path="*" element={<Navigate to="/" replace />} />

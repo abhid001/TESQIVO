@@ -1,9 +1,11 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { http } from "../../api/client";
-import type { InstanceUser } from "../../api/types";
+import type { InstanceUser, Project, UserMembership } from "../../api/types";
 import { Badge, Dialog, Field, errText, useToast } from "../../ui";
 import { Pager, SortHeader, sortBy, type SortState } from "../../components/table";
+
+const PROJECT_ROLES = ["project_admin", "test_manager", "tester", "viewer"];
 
 const PAGE = 25;
 
@@ -12,6 +14,7 @@ export function AdminUsers() {
   const toast = useToast();
   const [creating, setCreating] = useState(false);
   const [resetToken, setResetToken] = useState<string | null>(null);
+  const [projectsFor, setProjectsFor] = useState<InstanceUser | null>(null);
   const [sort, setSort] = useState<SortState>({ field: "username", dir: "asc" });
   const [page, setPage] = useState(1);
 
@@ -62,6 +65,9 @@ export function AdminUsers() {
                 <td className="nowrap"><Badge value={u.status} /></td>
                 <td className="nowrap">
                   <div className="inline-actions">
+                    {!u.is_system_admin && (
+                      <button className="sm" onClick={() => setProjectsFor(u)}>Projects</button>
+                    )}
                     <button className="sm" onClick={() => reset.mutate(u.id)}>Reset password</button>
                     {u.status === "active" ? (
                       <button className="sm" onClick={() => setStatus.mutate({ id: u.id, status: "disabled" })}>Disable</button>
@@ -80,6 +86,9 @@ export function AdminUsers() {
       {creating && (
         <NewUserDialog onClose={() => setCreating(false)} onDone={() => { invalidate(); setCreating(false); }} />
       )}
+      {projectsFor && (
+        <ManageUserProjectsDialog user={projectsFor} onClose={() => setProjectsFor(null)} />
+      )}
       {resetToken && (
         <Dialog title="Temporary reset token" onClose={() => setResetToken(null)}>
           <p className="muted">Give this one-time token to the user. It expires in 24 hours.</p>
@@ -89,6 +98,88 @@ export function AdminUsers() {
         </Dialog>
       )}
     </>
+  );
+}
+
+function ManageUserProjectsDialog({ user, onClose }: { user: InstanceUser; onClose: () => void }) {
+  const qc = useQueryClient();
+  const toast = useToast();
+  const [addPid, setAddPid] = useState("");
+  const [addRole, setAddRole] = useState("tester");
+
+  const memberships = useQuery({
+    queryKey: ["user-memberships", user.id],
+    queryFn: () => http.get<UserMembership[]>(`/users/${user.id}/memberships`),
+  });
+  const allProjects = useQuery({ queryKey: ["projects"], queryFn: () => http.get<Project[]>("/projects") });
+  const invalidate = () => {
+    qc.invalidateQueries({ queryKey: ["user-memberships", user.id] });
+    qc.invalidateQueries({ queryKey: ["admin-users"] });
+  };
+
+  const assign = useMutation({
+    mutationFn: (v: { pid: string; role: string }) =>
+      http.post(`/projects/${v.pid}/members`, { user_id: user.id, role: v.role }),
+    onSuccess: () => { invalidate(); setAddPid(""); toast("Project assigned"); },
+    onError: (e) => toast(errText(e), "error"),
+  });
+  const unassign = useMutation({
+    mutationFn: (pid: string) => http.del(`/projects/${pid}/members/${user.id}`),
+    onSuccess: () => { invalidate(); toast("Removed from project"); },
+    onError: (e) => toast(errText(e), "error"),
+  });
+
+  const memberPids = new Set((memberships.data ?? []).map((m) => m.project_id));
+  const assignable = (allProjects.data ?? []).filter((p) => p.status === "active" && !memberPids.has(p.id));
+
+  return (
+    <Dialog title={`Projects — ${user.display_name}`} onClose={onClose}>
+      <p className="muted" style={{ marginTop: 0 }}>
+        Assign this user to projects and set the role they hold in each.
+      </p>
+
+      {(memberships.data ?? []).length === 0 ? (
+        <p className="muted">Not a member of any project.</p>
+      ) : (
+        <table style={{ marginBottom: 14 }}>
+          <thead><tr><th>Project</th><th>Role</th><th></th></tr></thead>
+          <tbody>
+            {memberships.data!.map((m) => (
+              <tr key={m.project_id}>
+                <td className="key">{m.project_key}</td>
+                <td>
+                  <select
+                    value={m.role}
+                    onChange={(e) => assign.mutate({ pid: m.project_id, role: e.target.value })}
+                    style={{ width: "auto" }}
+                  >
+                    {PROJECT_ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
+                  </select>
+                </td>
+                <td className="nowrap">
+                  <button className="sm" style={{ color: "var(--danger)" }} onClick={() => unassign.mutate(m.project_id)}>Remove</button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+
+      <Field label="Add to a project">
+        <select value={addPid} onChange={(e) => setAddPid(e.target.value)}>
+          <option value="">Select project…</option>
+          {assignable.map((p) => <option key={p.id} value={p.id}>{p.key} — {p.name}</option>)}
+        </select>
+      </Field>
+      <Field label="Role">
+        <select value={addRole} onChange={(e) => setAddRole(e.target.value)}>
+          {PROJECT_ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
+        </select>
+      </Field>
+      <button className="primary" disabled={!addPid || assign.isPending} onClick={() => assign.mutate({ pid: addPid, role: addRole })}>
+        Assign
+      </button>
+    </Dialog>
   );
 }
 

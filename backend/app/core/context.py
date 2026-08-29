@@ -39,6 +39,7 @@ class Actor:
     username: str
     display_name: str
     is_system_admin: bool
+    email: str = ""
     must_change_password: bool = False
     memberships: dict[uuid.UUID, Membership] = field(default_factory=dict)
 
