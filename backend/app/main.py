@@ -10,6 +10,7 @@ from app.api.routers import access as access_router
 from app.api.routers import auth as auth_router
 from app.api.routers import execution as execution_router
 from app.api.routers import feedback as feedback_router
+from app.api.routers import notifications as notifications_router
 from app.api.routers import planning as planning_router
 from app.api.routers import projects as projects_router
 from app.api.routers import reporting as reporting_router
@@ -47,6 +48,7 @@ def create_app() -> FastAPI:
         traceability_router.router,
         reporting_router.router,
         feedback_router.router,
+        notifications_router.router,
     ):
         app.include_router(r, prefix=API_PREFIX)
 

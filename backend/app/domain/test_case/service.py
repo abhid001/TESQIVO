@@ -458,6 +458,7 @@ async def list_test_cases(
     project_id: uuid.UUID,
     folder_id: uuid.UUID | None = None,
     scenario_id: uuid.UUID | None = None,
+    plan_id: uuid.UUID | None = None,
     unassigned: bool = False,
     state: str | None = None,
     query: str | None = None,
@@ -466,6 +467,7 @@ async def list_test_cases(
     page_size: int = 25,
 ) -> tuple[list[TestCase], int]:
     from app.domain.sorting import apply_sort, natural_key_order
+    from app.models import PlanScopeItem
 
     authz.require_member(actor, project_id)
     stmt = select(TestCase).where(TestCase.project_id == project_id)
@@ -473,8 +475,16 @@ async def list_test_cases(
         stmt = stmt.where(TestCase.folder_id == folder_id)
     if scenario_id is not None:
         stmt = stmt.where(TestCase.scenario_id == scenario_id)
+    if plan_id is not None:
+        stmt = stmt.where(
+            TestCase.id.in_(
+                select(PlanScopeItem.test_case_id).where(PlanScopeItem.plan_id == plan_id)
+            )
+        )
     if unassigned:
-        stmt = stmt.where(TestCase.scenario_id.is_(None))
+        stmt = stmt.where(
+            ~TestCase.id.in_(select(PlanScopeItem.test_case_id))
+        )
     if state:
         stmt = stmt.where(TestCase.lifecycle_state == state)
     if query:

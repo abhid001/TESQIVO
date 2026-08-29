@@ -1,5 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { http } from "../api/client";
+import type { Notification } from "../api/types";
 import { AppMenu } from "./AppMenu";
 import { Logo } from "./Logo";
 
@@ -21,6 +24,109 @@ const MenuIcon = (
   </svg>
 );
 
+function relTime(iso: string): string {
+  const s = (Date.now() - new Date(iso).getTime()) / 1000;
+  if (s < 60) return "just now";
+  if (s < 3600) return `${Math.round(s / 60)}m ago`;
+  if (s < 86400) return `${Math.round(s / 3600)}h ago`;
+  return new Date(iso).toLocaleDateString();
+}
+
+function Notifications() {
+  const nav = useNavigate();
+  const qc = useQueryClient();
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  const q = useQuery({
+    queryKey: ["notifications"],
+    queryFn: () => http.get<{ items: Notification[]; unread: number }>("/notifications?limit=25"),
+    refetchInterval: 30000,
+    refetchOnWindowFocus: true,
+  });
+  const invalidate = () => qc.invalidateQueries({ queryKey: ["notifications"] });
+  const markRead = useMutation({
+    mutationFn: (id: string) => http.post(`/notifications/${id}/read`),
+    onSuccess: invalidate,
+  });
+  const markAll = useMutation({
+    mutationFn: () => http.post("/notifications/read-all"),
+    onSuccess: invalidate,
+  });
+
+  useEffect(() => {
+    if (!open) return;
+    const onDoc = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
+    document.addEventListener("mousedown", onDoc);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDoc);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
+  const unread = q.data?.unread ?? 0;
+  const items = q.data?.items ?? [];
+
+  const openItem = (n: Notification) => {
+    if (!n.read) markRead.mutate(n.id);
+    if (n.link) {
+      setOpen(false);
+      nav(n.link);
+    }
+  };
+
+  return (
+    <div className="app-menu" ref={ref}>
+      <button className="icon-round" onClick={() => setOpen((v) => !v)} aria-label={`Notifications${unread ? `, ${unread} unread` : ""}`}>
+        {BellIcon}
+        {unread > 0 && <span className="notif-badge">{unread > 9 ? "9+" : unread}</span>}
+      </button>
+      {open && (
+        <div className="app-menu-panel notif-panel" role="menu">
+          <div className="notif-head">
+            <strong>Notifications</strong>
+            {unread > 0 && (
+              <button className="btn sm ghost" onClick={() => markAll.mutate()} disabled={markAll.isPending}>
+                Mark all as read
+              </button>
+            )}
+          </div>
+          <div className="notif-list">
+            {items.length === 0 && <p className="muted small" style={{ padding: "12px" }}>You’re all caught up.</p>}
+            {items.map((n) => (
+              <button
+                key={n.id}
+                className={`notif-item ${n.read ? "" : "unread"}`}
+                onClick={() => openItem(n)}
+              >
+                <div className="notif-item-body">
+                  <div className="notif-item-title">{n.title}</div>
+                  {n.body && <div className="muted small notif-item-text">{n.body}</div>}
+                  <div className="notif-item-time">{relTime(n.created_at)}</div>
+                </div>
+                {!n.read && (
+                  <span
+                    className="notif-mark"
+                    role="button"
+                    title="Mark as read"
+                    onClick={(e) => { e.stopPropagation(); markRead.mutate(n.id); }}
+                  >
+                    ✓
+                  </span>
+                )}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 /** Global top bar: optional page title + optional brand + search + notifications + account menu. */
 export function Topbar({
   onToggleNav,
@@ -39,17 +145,6 @@ export function Topbar({
 }) {
   const nav = useNavigate();
   const [q, setQ] = useState("");
-  const [bellOpen, setBellOpen] = useState(false);
-  const bellRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!bellOpen) return;
-    const onDoc = (e: MouseEvent) => {
-      if (bellRef.current && !bellRef.current.contains(e.target as Node)) setBellOpen(false);
-    };
-    document.addEventListener("mousedown", onDoc);
-    return () => document.removeEventListener("mousedown", onDoc);
-  }, [bellOpen]);
 
   const search = onSearch && (
     <form
@@ -92,19 +187,7 @@ export function Topbar({
       <div className="spacer" />
       {title && search}
       <div className="topbar-actions">
-        <div className="app-menu" ref={bellRef}>
-          <button className="icon-round" onClick={() => setBellOpen((v) => !v)} aria-label="Notifications">
-            {BellIcon}
-          </button>
-          {bellOpen && (
-            <div className="app-menu-panel" style={{ minWidth: 240 }} role="menu">
-              <div className="app-menu-id-text" style={{ padding: "10px 12px" }}>
-                <strong>Notifications</strong>
-                <span className="muted">You’re all caught up.</span>
-              </div>
-            </div>
-          )}
-        </div>
+        <Notifications />
         <AppMenu />
       </div>
     </header>

@@ -146,6 +146,23 @@ class ProjectAccessRequest(UUIDMixin, TimestampMixin, Base):
     )
 
 
+class Notification(UUIDMixin, Base):
+    """A per-user inbox item (new feedback, access requests, …)."""
+
+    __tablename__ = "notification"
+
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("app_user.id"), nullable=False, index=True)
+    kind: Mapped[str] = mapped_column(String(24), nullable=False)
+    title: Mapped[str] = mapped_column(String(200), nullable=False)
+    body: Mapped[str | None] = mapped_column(String(500))
+    link: Mapped[str | None] = mapped_column(String(200))
+    ref_id: Mapped[uuid.UUID | None] = mapped_column()
+    created_at: Mapped[datetime] = mapped_column(
+        UTCDateTime, server_default=func.now(), nullable=False, index=True
+    )
+    read_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
+
+
 class Feedback(UUIDMixin, TimestampMixin, Base):
     """Product feedback from any signed-in user; triaged by a system administrator."""
 

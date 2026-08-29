@@ -22,6 +22,16 @@ async def test_bad_password_is_uniform_401(client, admin):
 
 
 @pytest.mark.asyncio
+async def test_username_login_is_case_insensitive(client, admin):
+    for name in ("ADMIN", "Admin", "  admin  "):
+        r = await client.post(
+            "/api/v1/auth/session", json={"username": name, "password": "AdminPassw0rd!"}
+        )
+        assert r.status_code == 201, f"{name!r}: {r.text}"
+        assert r.json()["username"] == "admin"
+
+
+@pytest.mark.asyncio
 async def test_lockout_after_threshold(client, admin):
     for _ in range(5):
         await client.post("/api/v1/auth/session", json={"username": "admin", "password": "nope"})

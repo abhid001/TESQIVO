@@ -102,7 +102,10 @@ async def authenticate(
     user_agent: str | None = None,
 ) -> SessionCreated:
     settings = get_settings()
-    user = await session.scalar(select(User).where(User.username == username))
+    # Username match is case-insensitive.
+    user = await session.scalar(
+        select(User).where(func.lower(User.username) == (username or "").strip().lower())
+    )
     # Uniform failure for missing / disabled / locked / bad password.
     if user is None:
         # spend comparable time to reduce user enumeration via timing

@@ -72,6 +72,16 @@ export interface ActivityItem {
   at: string;
 }
 
+export interface Notification {
+  id: string;
+  kind: string;
+  title: string;
+  body: string | null;
+  link: string | null;
+  created_at: string;
+  read: boolean;
+}
+
 export interface TrendPoint {
   date: string;
   passed: number;
@@ -130,6 +140,7 @@ export interface TestCase {
   project_id: string;
   folder_id: string | null;
   scenario_id: string | null;
+  plan_keys: string[];
   title: string;
   lifecycle_state: string;
   current_version_id: string | null;

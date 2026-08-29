@@ -72,6 +72,17 @@ async def submit_feedback(
         project_id=project_id,
         after={"category": category},
     )
+    from app.domain import notifications
+
+    notifications.queue(
+        session,
+        user_ids=await notifications.system_admin_ids(session),
+        kind="feedback",
+        title=f"{category.capitalize()} feedback from {actor.username}",
+        body=message,
+        link="/admin/feedback",
+        ref_id=fb.id,
+    )
     await session.commit()
     return fb
 

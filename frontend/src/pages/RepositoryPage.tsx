@@ -3,7 +3,7 @@ import { Link, useParams, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { http } from "../api/client";
 import { useProject } from "../api/hooks";
-import type { Paginated, Scenario, TestCase, Version } from "../api/types";
+import type { Paginated, Plan, Scenario, TestCase, Version } from "../api/types";
 import { Badge, Dialog, EmptyState, Field, errText, useToast } from "../ui";
 import { StepEditor, type DraftStep } from "../components/StepEditor";
 import { Pager, SortHeader, type SortState } from "../components/table";
@@ -21,7 +21,7 @@ export function RepositoryPage() {
   const [params] = useSearchParams();
   const [q, setQ] = useState(params.get("q") ?? "");
   const [state, setState] = useState("");
-  const [scenarioId, setScenarioId] = useState("");
+  const [planId, setPlanId] = useState("");
   const [page, setPage] = useState(1);
   const [sort, setSort] = useState<SortState>({ field: "key", dir: "asc" });
   const [creating, setCreating] = useState(false);
@@ -33,18 +33,22 @@ export function RepositoryPage() {
     queryFn: () => http.get<{ items: Scenario[] }>(`/projects/${pid}/scenarios`),
     enabled: !!pid,
   });
-  const scnById = Object.fromEntries((scenarios.data?.items ?? []).map((s) => [s.id, s]));
+  const plans = useQuery({
+    queryKey: ["plans", pid],
+    queryFn: () => http.get<Plan[]>(`/projects/${pid}/plans`),
+    enabled: !!pid,
+  });
 
   const sortParam = `${sort.dir === "desc" ? "-" : ""}${sort.field}`;
   const list = useQuery({
-    queryKey: ["testcases", pid, q, state, scenarioId, page, sortParam],
+    queryKey: ["testcases", pid, q, state, planId, page, sortParam],
     queryFn: () =>
       http.get<Paginated<TestCase>>(
         `/projects/${pid}/test-cases?` +
           new URLSearchParams({
             ...(q ? { q } : {}),
             ...(state ? { state } : {}),
-            ...(scenarioId === "none" ? { unassigned: "true" } : scenarioId ? { scenario_id: scenarioId } : {}),
+            ...(planId === "none" ? { unassigned: "true" } : planId ? { plan_id: planId } : {}),
             sort: sortParam,
             page: String(page),
             page_size: String(PAGE_SIZE),
@@ -128,11 +132,11 @@ export function RepositoryPage() {
             <option key={s}>{s}</option>
           ))}
         </select>
-        <select value={scenarioId} onChange={(e) => { setScenarioId(e.target.value); setPage(1); }}>
-          <option value="">Any scenario</option>
-          <option value="none">— no scenario —</option>
-          {scenarios.data?.items.map((s) => (
-            <option key={s.id} value={s.id}>{s.key} · {s.title}</option>
+        <select value={planId} onChange={(e) => { setPlanId(e.target.value); setPage(1); }}>
+          <option value="">Any test plan</option>
+          <option value="none">— not in a plan —</option>
+          {plans.data?.map((p) => (
+            <option key={p.id} value={p.id}>{p.key} · {p.name}</option>
           ))}
         </select>
       </div>
@@ -147,7 +151,7 @@ export function RepositoryPage() {
                 <tr>
                   <SortHeader label="Key" field="key" sort={sort} onSort={onSort} className="nowrap" />
                   <SortHeader label="Title" field="title" sort={sort} onSort={onSort} />
-                  <th className="nowrap">Scenario</th>
+                  <th className="nowrap">Test Plan</th>
                   <SortHeader label="State" field="state" sort={sort} onSort={onSort} className="nowrap" />
                   <SortHeader label="Automation" field="automation" sort={sort} onSort={onSort} className="nowrap" />
                   <th className="nowrap">Actions</th>
@@ -164,8 +168,8 @@ export function RepositoryPage() {
                       {tc.has_draft_changes && <span className="stale"> · draft pending</span>}
                     </td>
                     <td className="nowrap">
-                      {tc.scenario_id && scnById[tc.scenario_id]
-                        ? <span className="key">{scnById[tc.scenario_id].key}</span>
+                      {tc.plan_keys && tc.plan_keys.length > 0
+                        ? <span className="key">{tc.plan_keys.join(", ")}</span>
                         : <span className="muted">—</span>}
                     </td>
                     <td>

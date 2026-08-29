@@ -93,6 +93,20 @@ async def request_access(
         project_id=project_id,
         after={"requested_role": requested_role},
     )
+    from app.domain import notifications
+
+    recipients = set(await notifications.project_admin_ids(session, project_id)) | set(
+        await notifications.system_admin_ids(session)
+    )
+    notifications.queue(
+        session,
+        user_ids=recipients,
+        kind="access_request",
+        title=f"{actor.username} requested access to {project.key}",
+        body=message or f"Role requested: {requested_role}",
+        link="/admin/requests",
+        ref_id=req.id,
+    )
     await session.commit()
     return req
 

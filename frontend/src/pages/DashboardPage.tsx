@@ -116,12 +116,12 @@ function Kpi({
 }) {
   return (
     <button className={`kpi ${tone ? `tone-${tone}` : ""}`} onClick={onClick}>
+      <span className="kpi-icon">{icon}</span>
       <div className="kpi-main">
         <span className="kpi-label">{label}</span>
         <div className="kpi-value">{value}</div>
         {sub && <div className="kpi-sub">{sub}</div>}
       </div>
-      <span className="kpi-icon">{icon}</span>
     </button>
   );
 }
