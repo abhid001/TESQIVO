@@ -61,7 +61,10 @@ export function CyclesPage() {
   return (
     <>
       <div className="page-header">
-        <h2>Cycles</h2>
+        <div>
+          <h2>Test Executions</h2>
+          <div className="page-sub">Run manual cycles and track results in real time</div>
+        </div>
         <button className="primary" onClick={() => setCreating(true)} disabled={!plans.data?.length}>
           New cycle
         </button>

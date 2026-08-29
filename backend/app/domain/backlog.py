@@ -9,7 +9,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 
-from sqlalchemy import func, select
+from sqlalchemy import and_, delete, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.context import Actor, Ctx
@@ -17,7 +17,7 @@ from app.core.errors import ResourceNotFound, StateTransitionNotAllowed, Validat
 from app.domain import audit, authz
 from app.domain.concurrency import check_version
 from app.domain.keys import next_key
-from app.models import Defect, Project, Release, Requirement
+from app.models import Defect, Project, Release, Requirement, Scenario, TraceLink
 
 REQ_STATES = ("draft", "active", "fulfilled", "archived")
 REQ_TRANSITIONS = {
@@ -78,6 +78,64 @@ async def create_requirement(
                  entity_id=req.id, entity_key=req.key, project_id=project_id, after={"title": req.title})
     await session.commit()
     return req
+
+
+_PRIORITIES = ("critical", "high", "medium", "low")
+_REQ_TYPES = ("functional", "non_functional", "compliance", "ux", "performance")
+
+
+async def update_requirement(
+    session: AsyncSession, actor: Actor, ctx: Ctx, *, requirement_id: uuid.UUID,
+    expected_version: int, title: str | None = None, description: str | None = None,
+    priority: str | None = None, req_type: str | None = None,
+) -> Requirement:
+    req = await session.get(Requirement, requirement_id)
+    if req is None:
+        raise ResourceNotFound("Requirement not found.")
+    authz.authorize(actor, "requirement.manage", project_id=req.project_id)
+    check_version(req.version, expected_version, entity="requirement")
+    if title is not None:
+        if not title.strip():
+            raise ValidationFailed("Title must not be empty.")
+        req.title = title.strip()
+    if description is not None:
+        req.description = description or None
+    if priority is not None:
+        if priority not in _PRIORITIES:
+            raise ValidationFailed(f"Invalid priority '{priority}'.")
+        req.priority = priority
+    if req_type is not None:
+        req.req_type = req_type
+    req.version += 1
+    audit.record(session, actor=actor, ctx=ctx, entity_type="requirement", action="requirement.updated",
+                 entity_id=req.id, entity_key=req.key, project_id=req.project_id, after={"title": req.title})
+    await session.commit()
+    return req
+
+
+async def delete_requirement(
+    session: AsyncSession, actor: Actor, ctx: Ctx, *, requirement_id: uuid.UUID
+) -> None:
+    req = await session.get(Requirement, requirement_id)
+    if req is None:
+        raise ResourceNotFound("Requirement not found.")
+    authz.authorize(actor, "requirement.delete", project_id=req.project_id)
+    await session.execute(
+        delete(TraceLink).where(
+            or_(
+                and_(TraceLink.source_type == "requirement", TraceLink.source_id == req.id),
+                and_(TraceLink.target_type == "requirement", TraceLink.target_id == req.id),
+            )
+        )
+    )
+    await session.execute(
+        update(Scenario).where(Scenario.requirement_id == req.id).values(requirement_id=None)
+    )
+    audit.record(session, actor=actor, ctx=ctx, entity_type="requirement", action="requirement.deleted",
+                 entity_id=req.id, entity_key=req.key, project_id=req.project_id,
+                 before={"title": req.title})
+    await session.delete(req)
+    await session.commit()
 
 
 async def transition_requirement(

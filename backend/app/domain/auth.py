@@ -11,7 +11,7 @@ import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
@@ -315,6 +315,122 @@ async def create_user(
     return user
 
 
+async def update_user(
+    session: AsyncSession, actor: Actor, ctx: Ctx, *, user_id: uuid.UUID,
+    display_name: str | None = None, email: str | None = None, password: str | None = None,
+) -> User:
+    _require_sysadmin(actor)
+    user = await session.get(User, user_id)
+    if user is None:
+        raise ResourceNotFound("User not found.")
+    if password is not None:
+        _validate_password(password)
+        user.password_hash = hash_password(password)
+        user.must_change_password = False
+        user.failed_login_count = 0
+        user.locked_until = None
+        await session.execute(
+            UserSession.__table__.update()
+            .where(UserSession.user_id == user_id, UserSession.revoked_at.is_(None))
+            .values(revoked_at=_now())
+        )
+    if display_name is not None:
+        if not display_name.strip():
+            raise ValidationFailed("Display name must not be empty.")
+        user.display_name = display_name.strip()
+    if email is not None:
+        email = email.strip().lower()
+        if not email:
+            raise ValidationFailed("Email must not be empty.")
+        clash = await session.scalar(
+            select(User).where(func.lower(User.email) == email, User.id != user_id)
+        )
+        if clash is not None:
+            raise ValidationFailed("Another user already has that email.")
+        user.email = email
+    user.version += 1
+    audit.record(
+        session, actor=actor, ctx=ctx, entity_type="user", action="user.updated",
+        entity_id=user.id, after={"display_name": user.display_name},
+    )
+    await session.commit()
+    return user
+
+
+async def delete_user(
+    session: AsyncSession, actor: Actor, ctx: Ctx, *, user_id: uuid.UUID
+) -> None:
+    _require_sysadmin(actor)
+    if user_id == actor.id:
+        raise ValidationFailed("You cannot delete your own account.")
+    user = await session.get(User, user_id)
+    if user is None:
+        raise ResourceNotFound("User not found.")
+    if user.is_system_admin:
+        raise ValidationFailed(
+            "Administrator accounts cannot be deleted — disable the account instead."
+        )
+
+    from app.models import (
+        AuditEvent,
+        Defect,
+        Feedback,
+        PasswordResetToken,
+        Project,
+        ProjectAccessRequest,
+        ProjectMembership,
+        Release,
+        Requirement,
+        Scenario,
+        TestCase,
+        TestPlan,
+        UserSession,
+    )
+
+    footprint = [
+        select(func.count()).select_from(ProjectMembership).where(ProjectMembership.user_id == user_id),
+        select(func.count()).select_from(Requirement).where(Requirement.created_by == user_id),
+        select(func.count()).select_from(TestCase).where(TestCase.created_by == user_id),
+        select(func.count()).select_from(Defect).where(Defect.created_by == user_id),
+        select(func.count()).select_from(TestPlan).where(TestPlan.created_by == user_id),
+        select(func.count()).select_from(Release).where(Release.created_by == user_id),
+        select(func.count()).select_from(Scenario).where(Scenario.created_by == user_id),
+        select(func.count()).select_from(Project).where(Project.created_by == user_id),
+    ]
+    for q in footprint:
+        if await session.scalar(q):
+            raise ValidationFailed(
+                "This user belongs to a project or has authored content. Disable the "
+                "account instead of deleting it."
+            )
+
+    await session.execute(delete(UserSession).where(UserSession.user_id == user_id))
+    await session.execute(
+        delete(PasswordResetToken).where(
+            or_(PasswordResetToken.user_id == user_id, PasswordResetToken.created_by == user_id)
+        )
+    )
+    await session.execute(delete(Feedback).where(Feedback.user_id == user_id))
+    await session.execute(delete(ProjectAccessRequest).where(ProjectAccessRequest.user_id == user_id))
+    await session.execute(
+        update(AuditEvent).where(AuditEvent.actor_id == user_id).values(actor_id=None)
+    )
+    await session.execute(
+        update(Feedback).where(Feedback.resolved_by == user_id).values(resolved_by=None)
+    )
+    await session.execute(
+        update(ProjectAccessRequest)
+        .where(ProjectAccessRequest.decided_by == user_id)
+        .values(decided_by=None)
+    )
+    audit.record(
+        session, actor=actor, ctx=ctx, entity_type="user", action="user.deleted",
+        entity_id=user_id, before={"username": user.username},
+    )
+    await session.delete(user)
+    await session.commit()
+
+
 async def set_user_status(
     session: AsyncSession, actor: Actor, ctx: Ctx, *, user_id: uuid.UUID, status: str
 ) -> User:
@@ -351,30 +467,33 @@ async def set_user_status(
 async def initiate_password_reset(
     session: AsyncSession, actor: Actor, ctx: Ctx, *, user_id: uuid.UUID
 ) -> str:
-    """Returns a one-time token to hand to the user out-of-band (no email in Phase 1)."""
+    """Admin-issued temporary password. The user signs in with it directly and is
+    forced to choose a new password immediately. Returns the plaintext temp password
+    for the admin to hand over out-of-band."""
     _require_sysadmin(actor)
     user = await session.get(User, user_id)
     if user is None:
         raise ResourceNotFound("User not found.")
-    raw = secrets.token_urlsafe(32)
-    session.add(
-        PasswordResetToken(
-            user_id=user_id,
-            token_hash=hash_token(raw),
-            created_by=actor.id,
-            expires_at=_now() + timedelta(hours=24),
-        )
+    temp = _generate_temp_password()
+    user.password_hash = hash_password(temp)
+    user.must_change_password = True
+    user.failed_login_count = 0
+    user.locked_until = None
+    await session.execute(
+        UserSession.__table__.update()
+        .where(UserSession.user_id == user_id, UserSession.revoked_at.is_(None))
+        .values(revoked_at=_now())
     )
     audit.record(
         session,
         actor=actor,
         ctx=ctx,
         entity_type="user",
-        action="user.password_reset_initiated",
+        action="user.password_reset_by_admin",
         entity_id=user_id,
     )
     await session.commit()
-    return raw
+    return temp
 
 
 async def complete_password_reset(

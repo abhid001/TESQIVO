@@ -35,9 +35,15 @@ class StatusRequest(BaseModel):
     status: str
 
 
+class UpdateUserRequest(BaseModel):
+    display_name: str | None = None
+    email: EmailStr | None = None
+    password: str | None = Field(default=None, min_length=12, max_length=256)
+
+
 class ResetOut(BaseModel):
-    reset_token: str
-    note: str = "Deliver this token to the user out-of-band. It expires in 24 hours."
+    temporary_password: str
+    note: str = "The user signs in with this password and must set a new one immediately."
 
 
 def _out(u: User) -> UserOut:
@@ -88,6 +94,26 @@ async def set_status(
     return _out(user)
 
 
+@router.patch("/{user_id}", response_model=UserOut)
+async def update_user(
+    user_id: str, body: UpdateUserRequest, actor: CurrentActor, db: DbSession, ctx: RequestCtx
+) -> UserOut:
+    import uuid
+
+    user = await auth.update_user(
+        db, actor, ctx, user_id=uuid.UUID(user_id),
+        display_name=body.display_name, email=body.email, password=body.password,
+    )
+    return _out(user)
+
+
+@router.delete("/{user_id}", status_code=204)
+async def delete_user(user_id: str, actor: CurrentActor, db: DbSession, ctx: RequestCtx):
+    import uuid
+
+    await auth.delete_user(db, actor, ctx, user_id=uuid.UUID(user_id))
+
+
 class UserMembershipOut(BaseModel):
     project_id: str
     project_key: str
@@ -116,5 +142,5 @@ async def initiate_reset(
 ) -> ResetOut:
     import uuid
 
-    token = await auth.initiate_password_reset(db, actor, ctx, user_id=uuid.UUID(user_id))
-    return ResetOut(reset_token=token)
+    temp = await auth.initiate_password_reset(db, actor, ctx, user_id=uuid.UUID(user_id))
+    return ResetOut(temporary_password=temp)

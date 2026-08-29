@@ -127,6 +127,26 @@ async def transition_plan(plan_id: str, body: Transition, actor: CurrentActor, d
     return _plan_out(p)
 
 
+class UpdatePlan(BaseModel):
+    expected_version: int
+    name: str | None = None
+    description: str | None = None
+
+
+@router.patch("/plans/{plan_id}", response_model=PlanOut)
+async def update_plan(plan_id: str, body: UpdatePlan, actor: CurrentActor, db: DbSession, ctx: RequestCtx) -> PlanOut:
+    p = await planning.update_plan(
+        db, actor, ctx, plan_id=uuid.UUID(plan_id), expected_version=body.expected_version,
+        name=body.name, description=body.description,
+    )
+    return _plan_out(p)
+
+
+@router.delete("/plans/{plan_id}", status_code=204)
+async def delete_plan(plan_id: str, actor: CurrentActor, db: DbSession, ctx: RequestCtx):
+    await planning.delete_plan(db, actor, ctx, plan_id=uuid.UUID(plan_id))
+
+
 @router.post("/plans/{plan_id}/cycles", response_model=CycleOut, status_code=201)
 async def create_cycle(plan_id: str, body: CreateCycle, actor: CurrentActor, db: DbSession, ctx: RequestCtx) -> CycleOut:
     c = await planning.create_cycle(

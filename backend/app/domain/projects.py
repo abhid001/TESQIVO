@@ -10,14 +10,30 @@ import re
 import uuid
 from datetime import UTC, datetime
 
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.context import Actor, Ctx, Role
-from app.core.errors import DuplicateResource, ResourceNotFound, ValidationFailed
+from app.core.errors import DuplicateResource, Forbidden, ResourceNotFound, ValidationFailed
 from app.domain import audit, authz
 from app.domain.concurrency import check_version
-from app.models import Project, ProjectMembership, ReferenceValue, User
+from app.models import (
+    AuditEvent,
+    Defect,
+    EntityCounter,
+    Project,
+    ProjectAccessRequest,
+    ProjectMembership,
+    ReferenceValue,
+    Release,
+    Requirement,
+    Scenario,
+    TestCase,
+    TestCycle,
+    TestFolder,
+    TestPlan,
+    User,
+)
 
 _KEY_RE = re.compile(r"^[A-Z][A-Z0-9]{1,15}$")
 _DEFAULT_REFS = {
@@ -114,6 +130,59 @@ async def archive_project(
     )
     await session.commit()
     return project
+
+
+async def update_project(
+    session: AsyncSession, actor: Actor, ctx: Ctx, *, project_id: uuid.UUID,
+    expected_version: int, name: str | None = None, description: str | None = None,
+) -> Project:
+    project = await _get_project(session, project_id)
+    authz.authorize(actor, "project.settings", project_id=project_id)
+    check_version(project.version, expected_version, entity="project")
+    if name is not None:
+        if not name.strip():
+            raise ValidationFailed("Name must not be empty.")
+        project.name = name.strip()
+    if description is not None:
+        project.description = description or None
+    project.version += 1
+    audit.record(
+        session, actor=actor, ctx=ctx, entity_type="project", action="project.updated",
+        entity_id=project.id, entity_key=project.key, project_id=project.id, after={"name": project.name},
+    )
+    await session.commit()
+    return project
+
+
+async def delete_project(
+    session: AsyncSession, actor: Actor, ctx: Ctx, *, project_id: uuid.UUID
+) -> None:
+    if not actor.is_system_admin:
+        raise Forbidden("System administrator access required to delete a project.")
+    project = await _get_project(session, project_id)
+    if project.status != "archived":
+        raise ValidationFailed("Archive the project before deleting it.")
+    for model in (Requirement, TestCase, TestCycle, TestPlan, Release, Defect, Scenario, TestFolder):
+        if await session.scalar(
+            select(func.count()).select_from(model).where(model.project_id == project_id)
+        ):
+            raise ValidationFailed(
+                "This project still contains data (requirements, tests, cycles, …). "
+                "Only an empty archived project can be deleted."
+            )
+    await session.execute(delete(ReferenceValue).where(ReferenceValue.project_id == project_id))
+    await session.execute(delete(ProjectMembership).where(ProjectMembership.project_id == project_id))
+    await session.execute(delete(ProjectAccessRequest).where(ProjectAccessRequest.project_id == project_id))
+    await session.execute(delete(EntityCounter).where(EntityCounter.project_id == project_id))
+    await session.execute(delete(AuditEvent).where(AuditEvent.project_id == project_id))
+    key = project.key
+    await session.delete(project)
+    await session.flush()
+    audit.record(
+        session, actor=actor, ctx=ctx, entity_type="project", action="project.deleted",
+        entity_id=project_id, entity_key=key, before={"key": key},
+    )
+    await session.commit()
 
 
 async def add_member(
@@ -264,6 +333,27 @@ async def add_reference_value(
     )
     await session.commit()
     return rv
+
+
+async def remove_reference_value(
+    session: AsyncSession, actor: Actor, ctx: Ctx, *, ref_id: uuid.UUID
+) -> None:
+    rv = await session.get(ReferenceValue, ref_id)
+    if rv is None:
+        raise ResourceNotFound("Reference value not found.")
+    authz.authorize(actor, "reference.manage", project_id=rv.project_id)
+    audit.record(
+        session,
+        actor=actor,
+        ctx=ctx,
+        entity_type="reference_value",
+        action="reference.removed",
+        entity_id=rv.id,
+        project_id=rv.project_id,
+        before={"kind": rv.kind, "value": rv.value},
+    )
+    await session.delete(rv)
+    await session.commit()
 
 
 async def list_projects_for(session: AsyncSession, actor: Actor) -> list[Project]:

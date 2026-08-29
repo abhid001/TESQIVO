@@ -63,10 +63,11 @@ export function AppMenu() {
           <div className="app-menu-sep" />
           <button role="menuitem" onClick={() => go("/profile")}>Your profile</button>
           <button role="menuitem" onClick={() => go("/profile#password")}>Change password</button>
-          {me.is_system_admin && (
+          {me.is_system_admin ? (
             <button role="menuitem" onClick={() => go("/admin")}>Admin console</button>
+          ) : (
+            <button role="menuitem" onClick={() => go("/projects")}>Switch project</button>
           )}
-          <button role="menuitem" onClick={() => go("/projects")}>Switch project</button>
           <div className="app-menu-sep" />
           <button role="menuitem" className="danger" onClick={() => void logout()}>Sign out</button>
         </div>

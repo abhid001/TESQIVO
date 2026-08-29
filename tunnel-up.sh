@@ -4,9 +4,11 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 mkdir -p .tunnel
+PORT=$(grep -E '^TESQIVO_HTTP_PORT=' .env | cut -d= -f2)
+PORT=${PORT:-8080}
 pkill -f 'cloudflared tunnel --url' 2>/dev/null || true
 sleep 1
-nohup cloudflared tunnel --url http://localhost:8080 --no-autoupdate > .tunnel/cloudflared.log 2>&1 &
+nohup cloudflared tunnel --url "http://localhost:${PORT}" --no-autoupdate > .tunnel/cloudflared.log 2>&1 &
 echo $! > .tunnel/pid
 for i in $(seq 1 20); do
   URL=$(grep -Eo 'https://[a-z0-9-]+\.trycloudflare\.com' .tunnel/cloudflared.log | head -1 || true)

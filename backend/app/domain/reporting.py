@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import uuid
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -377,6 +377,51 @@ async def summary(session: AsyncSession, actor: Actor, scope: Scope) -> dict:
         "data_as_of": datetime.now(UTC).isoformat(),
         "metrics": [m.to_json(scope) for m in metrics],
     }
+
+
+async def execution_trend(
+    session: AsyncSession, actor: Actor, scope: Scope, *, days: int = 30
+) -> dict:
+    """Per-day count of completed execution attempts in the selected scope, split
+    by result. Used by the dashboard 'Execution Trend' chart."""
+    authz.authorize(actor, "report.view", project_id=scope.project_id)
+    days = max(7, min(days, 90))
+    start = (datetime.now(UTC) - timedelta(days=days - 1)).replace(
+        hour=0, minute=0, second=0, microsecond=0
+    )
+    stmt = select(ExecutionAttempt).where(
+        ExecutionAttempt.project_id == scope.project_id,
+        ExecutionAttempt.status != "IN_PROGRESS",
+    )
+    if scope.release_id:
+        stmt = stmt.where(ExecutionAttempt.release_id == scope.release_id)
+    if scope.cycle_id:
+        stmt = stmt.where(ExecutionAttempt.cycle_id == scope.cycle_id)
+    if scope.environment:
+        stmt = stmt.where(ExecutionAttempt.environment == scope.environment)
+    attempts = list((await session.scalars(stmt)).all())
+
+    buckets: dict[str, dict] = {}
+    for i in range(days):
+        d = (start + timedelta(days=i)).date().isoformat()
+        buckets[d] = {"date": d, "passed": 0, "failed": 0, "blocked": 0, "other": 0, "total": 0}
+    for a in attempts:
+        when = a.ended_at or a.started_at
+        key = when.date().isoformat()
+        b = buckets.get(key)
+        if b is None:
+            continue
+        result = a.overall_result or a.status
+        if result == "PASSED":
+            b["passed"] += 1
+        elif result == "FAILED":
+            b["failed"] += 1
+        elif result == "BLOCKED":
+            b["blocked"] += 1
+        else:
+            b["other"] += 1
+        b["total"] += 1
+    return {"days": days, "series": [buckets[k] for k in sorted(buckets)]}
 
 
 async def cycle_breakdown(session: AsyncSession, actor: Actor, scope: Scope) -> list[dict]:

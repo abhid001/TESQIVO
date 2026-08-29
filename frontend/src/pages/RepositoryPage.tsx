@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { Link, useParams, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { http } from "../api/client";
 import { useProject } from "../api/hooks";
@@ -18,7 +18,8 @@ export function RepositoryPage() {
   const pid = project?.id;
   const qc = useQueryClient();
   const toast = useToast();
-  const [q, setQ] = useState("");
+  const [params] = useSearchParams();
+  const [q, setQ] = useState(params.get("q") ?? "");
   const [state, setState] = useState("");
   const [scenarioId, setScenarioId] = useState("");
   const [page, setPage] = useState(1);
@@ -51,6 +52,11 @@ export function RepositoryPage() {
       ),
     enabled: !!pid,
   });
+
+  const urlQ = params.get("q");
+  useEffect(() => {
+    if (urlQ !== null) { setQ(urlQ); setPage(1); }
+  }, [urlQ]);
 
   const invalidate = () => qc.invalidateQueries({ queryKey: ["testcases"] });
 
@@ -101,7 +107,10 @@ export function RepositoryPage() {
   return (
     <>
       <div className="page-header">
-        <h2>Repository</h2>
+        <div>
+          <h2>Test Cases</h2>
+          <div className="page-sub">Design, organize, review, and reuse test coverage</div>
+        </div>
         <button className="primary" onClick={() => setCreating(true)}>
           + New test case
         </button>

@@ -100,6 +100,12 @@ class ArchiveRequest(BaseModel):
     expected_version: int
 
 
+class UpdateProjectRequest(BaseModel):
+    expected_version: int
+    name: str | None = None
+    description: str | None = None
+
+
 @router.post("/{project_id}/archive", response_model=ProjectOut)
 async def archive_project(
     project_id: str, body: ArchiveRequest, actor: CurrentActor, db: DbSession, ctx: RequestCtx
@@ -108,6 +114,22 @@ async def archive_project(
         db, actor, ctx, project_id=uuid.UUID(project_id), expected_version=body.expected_version
     )
     return _out(project)
+
+
+@router.patch("/{project_id}", response_model=ProjectOut)
+async def update_project(
+    project_id: str, body: UpdateProjectRequest, actor: CurrentActor, db: DbSession, ctx: RequestCtx
+) -> ProjectOut:
+    project = await projects.update_project(
+        db, actor, ctx, project_id=uuid.UUID(project_id),
+        expected_version=body.expected_version, name=body.name, description=body.description,
+    )
+    return _out(project)
+
+
+@router.delete("/{project_id}", status_code=204)
+async def delete_project(project_id: str, actor: CurrentActor, db: DbSession, ctx: RequestCtx):
+    await projects.delete_project(db, actor, ctx, project_id=uuid.UUID(project_id))
 
 
 class MembershipOut(BaseModel):
@@ -189,3 +211,10 @@ async def add_reference_value(
         db, actor, ctx, project_id=uuid.UUID(project_id), kind=body.kind, value=body.value
     )
     return ReferenceOut(id=str(r.id), kind=r.kind, value=r.value, is_active=r.is_active)
+
+
+@router.delete("/{project_id}/reference-values/{ref_id}", status_code=204)
+async def delete_reference_value(
+    project_id: str, ref_id: str, actor: CurrentActor, db: DbSession, ctx: RequestCtx
+):
+    await projects.remove_reference_value(db, actor, ctx, ref_id=uuid.UUID(ref_id))

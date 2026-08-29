@@ -25,6 +25,14 @@ class CreateRequirement(BaseModel):
     release_id: str | None = None
 
 
+class UpdateRequirement(BaseModel):
+    expected_version: int
+    title: str | None = None
+    description: str | None = None
+    priority: str | None = None
+    req_type: str | None = None
+
+
 class CreateRelease(BaseModel):
     name: str = Field(min_length=1, max_length=200)
     description: str | None = None
@@ -122,6 +130,20 @@ async def transition_requirement(req_id: str, body: Transition, actor: CurrentAc
         db, actor, ctx, requirement_id=uuid.UUID(req_id), to_status=body.to, expected_version=body.expected_version
     )
     return _req_out(r)
+
+
+@router.patch("/requirements/{req_id}")
+async def update_requirement(req_id: str, body: UpdateRequirement, actor: CurrentActor, db: DbSession, ctx: RequestCtx) -> dict:
+    r = await backlog.update_requirement(
+        db, actor, ctx, requirement_id=uuid.UUID(req_id), expected_version=body.expected_version,
+        title=body.title, description=body.description, priority=body.priority, req_type=body.req_type,
+    )
+    return _req_out(r)
+
+
+@router.delete("/requirements/{req_id}", status_code=204)
+async def delete_requirement(req_id: str, actor: CurrentActor, db: DbSession, ctx: RequestCtx):
+    await backlog.delete_requirement(db, actor, ctx, requirement_id=uuid.UUID(req_id))
 
 
 @router.post("/projects/{project_id}/releases", status_code=201)

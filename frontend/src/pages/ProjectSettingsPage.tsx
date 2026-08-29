@@ -55,7 +55,10 @@ export function ProjectSettingsPage() {
   return (
     <>
       <div className="page-header">
-        <h2>Project settings — members</h2>
+        <div>
+          <h2>Settings</h2>
+          <div className="page-sub">Members and access for {project.key}</div>
+        </div>
         <button className="primary" onClick={() => setAdding(true)}>+ Add member</button>
       </div>
 

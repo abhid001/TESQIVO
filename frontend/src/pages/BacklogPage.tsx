@@ -1,11 +1,14 @@
-import { useState, type ReactNode } from "react";
-import { useParams } from "react-router-dom";
+import { useEffect, useState, type ReactNode } from "react";
+import { useParams, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { http } from "../api/client";
 import { useProject } from "../api/hooks";
 import type { Defect, Paginated, Release, Requirement, TestCase } from "../api/types";
 import { Badge, Dialog, EmptyState, Field, errText, useToast } from "../ui";
 import { Pager, SortHeader, sortBy, type SortState } from "../components/table";
+import { Icons } from "../components/icons";
+
+const PRIORITIES = ["critical", "high", "medium", "low"];
 
 const PAGE = 20;
 
@@ -86,13 +89,16 @@ function Listing<T extends { id: string }>({
   );
 }
 
-export function BacklogPage() {
+export function BacklogPage({ view = "both" }: { view?: "requirements" | "defects" | "both" }) {
   const { projectKey } = useParams();
   const { project } = useProject(projectKey);
   const pid = project?.id;
   const qc = useQueryClient();
   const toast = useToast();
+  const [params, setParams] = useSearchParams();
   const [dialog, setDialog] = useState<null | "requirement" | "defect" | "link">(null);
+  const [editReq, setEditReq] = useState<Requirement | null>(null);
+  const [delReq, setDelReq] = useState<Requirement | null>(null);
 
   const reqs = useQuery({
     queryKey: ["reqs", pid],
@@ -126,23 +132,48 @@ export function BacklogPage() {
     onSuccess: (_d, v) => { invalidateAll(); toast(`Status changed to ${v.to}`); },
     onError: (e) => toast(errText(e), "error"),
   });
+  const removeReq = useMutation({
+    mutationFn: (id: string) => http.del(`/requirements/${id}`),
+    onSuccess: () => { invalidateAll(); setDelReq(null); toast("Requirement deleted"); },
+    onError: (e) => toast(errText(e), "error"),
+  });
+
+  // deep-link from the traceability matrix: ?req=DEMO-REQ-1 opens that requirement
+  const focusKey = params.get("req");
+  useEffect(() => {
+    if (!focusKey || !reqs.data) return;
+    const found = reqs.data.items.find((r) => r.key === focusKey);
+    if (found) setEditReq(found);
+    setParams((p) => { p.delete("req"); return p; }, { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusKey, reqs.data]);
 
   if (!project) return <p>Loading…</p>;
 
   return (
     <>
       <div className="page-header">
-        <h2>Requirements &amp; Defects</h2>
+        <div>
+          <h2>{view === "defects" ? "Defects" : "Requirements"}</h2>
+          <div className="page-sub">
+            {view === "defects"
+              ? "Track defects raised against this project"
+              : "Manage product requirements and their test coverage"}
+          </div>
+        </div>
         <div className="inline-actions">
-          <button onClick={() => setDialog("requirement")}>New requirement</button>
+          {view !== "defects" && <button onClick={() => setDialog("requirement")}>New requirement</button>}
           <button onClick={() => setDialog("defect")}>New defect</button>
-          <button className="primary" onClick={() => setDialog("link")}>
-            Link requirement → test case
-          </button>
+          {view !== "defects" && (
+            <button className="primary" onClick={() => setDialog("link")}>
+              Link requirement → test case
+            </button>
+          )}
         </div>
       </div>
 
       <div className="stack">
+        {view !== "defects" && (
         <Listing
           title="Requirements"
           accent="var(--sec-backlog)"
@@ -155,16 +186,23 @@ export function BacklogPage() {
             { key: "status", label: "Status", className: "nowrap", render: (r: Requirement) => <Badge value={r.status} /> },
             {
               key: "actions", label: "Actions", sortable: false, className: "nowrap",
-              render: (r: Requirement) =>
-                r.status === "draft" ? (
-                  <button className="sm" onClick={() => transition.mutate({ kind: "requirements", id: r.id, version: r.version, to: "active" })}>
-                    Activate
-                  </button>
-                ) : null,
+              render: (r: Requirement) => (
+                <div className="inline-actions">
+                  {r.status === "draft" && (
+                    <button className="sm" onClick={() => transition.mutate({ kind: "requirements", id: r.id, version: r.version, to: "active" })}>
+                      Activate
+                    </button>
+                  )}
+                  <button className="icon-btn" title="Edit" onClick={() => setEditReq(r)}>{Icons.edit}</button>
+                  <button className="icon-btn warn" title="Delete" onClick={() => setDelReq(r)}>{Icons.trash}</button>
+                </div>
+              ),
             },
           ]}
         />
+        )}
 
+        {view !== "requirements" && (
         <Listing
           title="Defects"
           accent="var(--sec-traceability)"
@@ -186,6 +224,7 @@ export function BacklogPage() {
             },
           ]}
         />
+        )}
       </div>
 
       {dialog && dialog !== "link" && (
@@ -212,7 +251,48 @@ export function BacklogPage() {
           }}
         />
       )}
+      {editReq && (
+        <EditRequirementDialog
+          req={editReq}
+          onClose={() => setEditReq(null)}
+          onDone={() => { invalidateAll(); setEditReq(null); }}
+        />
+      )}
+      {delReq && (
+        <Dialog title="Delete requirement" onClose={() => setDelReq(null)}>
+          <p>
+            Delete <strong className="key">{delReq.key}</strong> — “{delReq.title}”? This removes it and
+            its trace links permanently. This cannot be undone.
+          </p>
+          <div className="inline-actions" style={{ marginTop: 14 }}>
+            <button className="danger" disabled={removeReq.isPending} onClick={() => removeReq.mutate(delReq.id)}>Delete</button>
+            <button onClick={() => setDelReq(null)}>Cancel</button>
+          </div>
+        </Dialog>
+      )}
     </>
+  );
+}
+
+function EditRequirementDialog({ req, onClose, onDone }: { req: Requirement; onClose: () => void; onDone: () => void }) {
+  const toast = useToast();
+  const [f, setF] = useState({ title: req.title, priority: req.priority });
+  const save = useMutation({
+    mutationFn: () =>
+      http.patch(`/requirements/${req.id}`, { expected_version: req.version, title: f.title, priority: f.priority }),
+    onSuccess: () => { toast("Requirement updated"); onDone(); },
+    onError: (e) => toast(errText(e), "error"),
+  });
+  return (
+    <Dialog title={`Edit ${req.key}`} onClose={onClose}>
+      <Field label="Title"><input value={f.title} onChange={(e) => setF({ ...f, title: e.target.value })} autoFocus /></Field>
+      <Field label="Priority">
+        <select value={f.priority} onChange={(e) => setF({ ...f, priority: e.target.value })}>
+          {PRIORITIES.map((p) => <option key={p} value={p}>{p}</option>)}
+        </select>
+      </Field>
+      <button className="primary" disabled={!f.title.trim() || save.isPending} onClick={() => save.mutate()}>Save changes</button>
+    </Dialog>
   );
 }
 

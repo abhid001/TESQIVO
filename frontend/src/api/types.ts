@@ -56,6 +56,31 @@ export interface UserMembership {
   role: string;
 }
 
+export interface ReferenceValue {
+  id: string;
+  kind: string;
+  value: string;
+  is_active: boolean;
+}
+
+export interface ActivityItem {
+  id: string;
+  action: string;
+  text: string;
+  actor: string;
+  kind: "ok" | "bad" | "info";
+  at: string;
+}
+
+export interface TrendPoint {
+  date: string;
+  passed: number;
+  failed: number;
+  blocked: number;
+  other: number;
+  total: number;
+}
+
 export interface InstanceUser {
   id: string;
   username: string;
