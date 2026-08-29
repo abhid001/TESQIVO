@@ -25,7 +25,7 @@ const MenuIcon = (
 export function Topbar({
   onToggleNav,
   onSearch,
-  searchPlaceholder = "Search test cases…",
+  searchPlaceholder = "Search this project…",
   brand = false,
   title,
   subtitle,

@@ -48,6 +48,24 @@ const TABS = [
 
 const SETTINGS_TAB = { to: "settings", label: "Settings", section: "settings", icon: Icons.settings } as const;
 
+/** Route a project-wide search: readable keys jump to their record, free text
+ *  falls back to the test-case search. */
+function projectSearchPath(projectKey: string, raw: string): string {
+  const q = raw.trim();
+  const m = q.toUpperCase().match(/-(REQ|DEF|TC|PLAN|REL|SCN)-\d+$/);
+  const base = `/p/${projectKey}`;
+  if (m) {
+    const kind = m[1];
+    if (kind === "REQ") return `${base}/requirements?req=${encodeURIComponent(q.toUpperCase())}`;
+    if (kind === "DEF") return `${base}/defects?q=${encodeURIComponent(q)}`;
+    if (kind === "TC") return `${base}/tests?q=${encodeURIComponent(q)}`;
+    if (kind === "PLAN") return `${base}/plans`;
+    if (kind === "REL") return `${base}/releases`;
+    if (kind === "SCN") return `${base}/scenarios`;
+  }
+  return `${base}/tests?q=${encodeURIComponent(q)}`;
+}
+
 function useCollapsed() {
   const [collapsed, setCollapsed] = useState(() => {
     try { return localStorage.getItem("tq.nav.collapsed") === "1"; } catch { return false; }
@@ -110,7 +128,7 @@ function Shell() {
       <div className="content">
         <Topbar
           onToggleNav={() => setNavOpen((v) => !v)}
-          onSearch={(q) => nav(`/p/${projectKey}/tests?q=${encodeURIComponent(q)}`)}
+          onSearch={(q) => nav(projectSearchPath(projectKey!, q))}
           title={current.to === "dashboard" ? "Quality Command Center" : undefined}
           subtitle={current.to === "dashboard" ? project?.name : undefined}
         />

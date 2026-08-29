@@ -145,6 +145,24 @@ def _summarise(ev: AuditEvent, actor_name: str) -> dict:
     }
 
 
+async def entity_history(
+    session: AsyncSession, actor: Actor, *, entity_id: uuid.UUID, project_id: uuid.UUID
+) -> list[dict]:
+    """Audit trail for one entity, newest first (PRS §12 — history is visible)."""
+    from app.domain import authz
+
+    authz.authorize(actor, "report.view", project_id=project_id)
+    rows = (
+        await session.execute(
+            select(AuditEvent, User)
+            .outerjoin(User, User.id == AuditEvent.actor_id)
+            .where(AuditEvent.entity_id == entity_id)
+            .order_by(AuditEvent.occurred_at.desc())
+        )
+    ).all()
+    return [_summarise(ev, u.display_name if u else "System") for (ev, u) in rows]
+
+
 async def recent_activity(
     session: AsyncSession, actor: Actor, *, project_id: uuid.UUID, limit: int = 15
 ) -> list[dict]:

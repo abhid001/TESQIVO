@@ -7,10 +7,11 @@ from datetime import datetime
 
 from fastapi import APIRouter, Query
 from pydantic import BaseModel, Field
+from sqlalchemy import select
 
 from app.api.deps import CurrentActor, DbSession, RequestCtx
-from app.domain import authz, backlog, traceability
-from app.models import Defect, Release, Requirement
+from app.domain import audit, authz, backlog, traceability
+from app.models import Defect, Release, Requirement, User
 
 router = APIRouter(tags=["traceability"])
 
@@ -19,9 +20,15 @@ router = APIRouter(tags=["traceability"])
 class CreateRequirement(BaseModel):
     title: str = Field(min_length=1, max_length=300)
     description: str | None = None
+    acceptance_criteria: str | None = None
     req_type: str = "functional"
     priority: str = "medium"
+    status: str = "draft"
     component: str | None = None
+    labels: str | None = None
+    owner_id: str | None = None
+    source_type: str = "manual"
+    external_reference: str | None = None
     release_id: str | None = None
 
 
@@ -29,8 +36,18 @@ class UpdateRequirement(BaseModel):
     expected_version: int
     title: str | None = None
     description: str | None = None
+    acceptance_criteria: str | None = None
     priority: str | None = None
     req_type: str | None = None
+    status: str | None = None
+    component: str | None = None
+    labels: str | None = None
+    owner_id: str | None = None
+    clear_owner: bool = False
+    source_type: str | None = None
+    external_reference: str | None = None
+    release_id: str | None = None
+    clear_release: bool = False
 
 
 class CreateRelease(BaseModel):
@@ -77,10 +94,17 @@ class CreateLink(BaseModel):
     external_reference: str | None = None
 
 
-def _req_out(r: Requirement) -> dict:
-    return {"id": str(r.id), "key": r.key, "title": r.title, "status": r.status,
-            "priority": r.priority, "req_type": r.req_type,
-            "release_id": str(r.release_id) if r.release_id else None, "version": r.version}
+def _req_out(r: Requirement, owner_name: str | None = None) -> dict:
+    return {
+        "id": str(r.id), "key": r.key, "title": r.title,
+        "description": r.description, "acceptance_criteria": r.acceptance_criteria,
+        "status": r.status, "priority": r.priority, "req_type": r.req_type,
+        "component": r.component, "labels": r.labels,
+        "owner_id": str(r.owner_id) if r.owner_id else None, "owner_name": owner_name,
+        "source_type": r.source_type, "external_reference": r.external_reference,
+        "release_id": str(r.release_id) if r.release_id else None,
+        "version": r.version,
+    }
 
 
 def _rel_out(r: Release) -> dict:
@@ -97,14 +121,27 @@ def _def_out(d: Defect) -> dict:
             "release_id": str(d.release_id) if d.release_id else None, "version": d.version}
 
 
+async def _owner_names(db, rows: list) -> dict:
+    ids = {r.owner_id for r in rows if r.owner_id}
+    if not ids:
+        return {}
+    users = (await db.scalars(select(User).where(User.id.in_(ids)))).all()
+    return {u.id: u.display_name for u in users}
+
+
 @router.post("/projects/{project_id}/requirements", status_code=201)
 async def create_requirement(project_id: str, body: CreateRequirement, actor: CurrentActor, db: DbSession, ctx: RequestCtx) -> dict:
     r = await backlog.create_requirement(
-        db, actor, ctx, project_id=uuid.UUID(project_id), title=body.title, description=body.description,
-        req_type=body.req_type, priority=body.priority, component=body.component,
+        db, actor, ctx, project_id=uuid.UUID(project_id), title=body.title,
+        description=body.description, acceptance_criteria=body.acceptance_criteria,
+        req_type=body.req_type, priority=body.priority, status=body.status,
+        component=body.component, labels=body.labels,
+        owner_id=uuid.UUID(body.owner_id) if body.owner_id else None,
+        source_type=body.source_type, external_reference=body.external_reference,
         release_id=uuid.UUID(body.release_id) if body.release_id else None,
     )
-    return _req_out(r)
+    names = await _owner_names(db, [r])
+    return _req_out(r, names.get(r.owner_id))
 
 
 def _page(items: list, page: int, page_size: int, total: int) -> dict:
@@ -121,7 +158,31 @@ async def list_requirements(project_id: str, actor: CurrentActor, db: DbSession,
     pid = uuid.UUID(project_id)
     authz.require_member(actor, pid)
     rows, total = await backlog.list_entities(db, Requirement, pid, page, page_size, sort=sort)
-    return _page([_req_out(r) for r in rows], page, page_size, total)
+    names = await _owner_names(db, rows)
+    return _page([_req_out(r, names.get(r.owner_id)) for r in rows], page, page_size, total)
+
+
+@router.get("/requirements/{req_id}")
+async def get_requirement(req_id: str, actor: CurrentActor, db: DbSession) -> dict:
+    r = await db.get(Requirement, uuid.UUID(req_id))
+    from app.core.errors import ResourceNotFound
+
+    if r is None:
+        raise ResourceNotFound("Requirement not found.")
+    authz.require_member(actor, r.project_id)
+    names = await _owner_names(db, [r])
+    return _req_out(r, names.get(r.owner_id))
+
+
+@router.get("/requirements/{req_id}/history")
+async def requirement_history(req_id: str, actor: CurrentActor, db: DbSession) -> dict:
+    r = await db.get(Requirement, uuid.UUID(req_id))
+    from app.core.errors import ResourceNotFound
+
+    if r is None:
+        raise ResourceNotFound("Requirement not found.")
+    authz.require_member(actor, r.project_id)
+    return {"items": await audit.entity_history(db, actor, entity_id=r.id, project_id=r.project_id)}
 
 
 @router.post("/requirements/{req_id}/transitions")
@@ -134,11 +195,24 @@ async def transition_requirement(req_id: str, body: Transition, actor: CurrentAc
 
 @router.patch("/requirements/{req_id}")
 async def update_requirement(req_id: str, body: UpdateRequirement, actor: CurrentActor, db: DbSession, ctx: RequestCtx) -> dict:
+    from app.domain.backlog import UNSET
+
+    owner = UNSET if (body.owner_id is None and not body.clear_owner) else (
+        None if body.clear_owner else uuid.UUID(body.owner_id)  # type: ignore[arg-type]
+    )
+    release = UNSET if (body.release_id is None and not body.clear_release) else (
+        None if body.clear_release else uuid.UUID(body.release_id)  # type: ignore[arg-type]
+    )
     r = await backlog.update_requirement(
         db, actor, ctx, requirement_id=uuid.UUID(req_id), expected_version=body.expected_version,
-        title=body.title, description=body.description, priority=body.priority, req_type=body.req_type,
+        title=body.title, description=body.description, acceptance_criteria=body.acceptance_criteria,
+        priority=body.priority, req_type=body.req_type, status=body.status,
+        component=body.component, labels=body.labels, owner_id=owner,
+        source_type=body.source_type, external_reference=body.external_reference,
+        release_id=release,
     )
-    return _req_out(r)
+    names = await _owner_names(db, [r])
+    return _req_out(r, names.get(r.owner_id))
 
 
 @router.delete("/requirements/{req_id}", status_code=204)

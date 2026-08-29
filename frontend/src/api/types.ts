@@ -253,9 +253,17 @@ export interface Requirement {
   id: string;
   key: string;
   title: string;
+  description: string | null;
+  acceptance_criteria: string | null;
   status: string;
   priority: string;
   req_type: string;
+  component: string | null;
+  labels: string | null;
+  owner_id: string | null;
+  owner_name: string | null;
+  source_type: string;
+  external_reference: string | null;
   release_id: string | null;
   version: number;
 }
