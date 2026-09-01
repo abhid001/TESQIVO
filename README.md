@@ -39,18 +39,18 @@ end-to-end steps to stand it up, create tester accounts, and a suggested walkthr
 ## Quick start (Docker)
 
 ```bash
-cp .env.example .env
-# edit .env: set TESQIVO_SECRET_KEY (openssl rand -base64 48) and
-# TESQIVO_BOOTSTRAP_TOKEN (openssl rand -hex 24)
-
-docker compose up -d --build
-open http://localhost:8080          # complete first-admin setup with the bootstrap token
+curl -O https://raw.githubusercontent.com/abhid001/TESQIVO/main/docker-compose.yml
+docker compose up -d
+docker compose exec web python -m app.cli create-admin
+# open http://localhost:8080
 ```
 
-The stack: `db` (PostgreSQL 16), `redis`, `migrate` (one-shot Alembic), `api`
-(FastAPI/Uvicorn), `worker`, `proxy` (Caddy serving the SPA + proxying `/api`).
+No `.env` is required for a trial. One image (`ghcr.io/abhid001/tesqivo`) serves the
+SPA and the API; `db` (PostgreSQL 16) and `redis` run alongside it. For production
+config, HTTPS, upgrades and backups see [`docs/self-hosting.md`](docs/self-hosting.md).
 
-API docs: `http://localhost:8080/api/v1/docs` · OpenAPI: `/api/v1/openapi.json`.
+API docs: `http://localhost:8080/api/v1/docs` · OpenAPI: `/api/v1/openapi.json` ·
+build: `/api/v1/version`.
 
 ## Local development
 
@@ -58,7 +58,7 @@ API docs: `http://localhost:8080/api/v1/docs` · OpenAPI: `/api/v1/openapi.json`
 # backend
 cd backend
 python3 -m venv .venv && .venv/bin/pip install -e ".[dev]"
-.venv/bin/python -m pytest -q          # 28 tests: smoke, auth, RBAC, versioning, execution, acceptance
+.venv/bin/python -m pytest -q
 .venv/bin/ruff check app/ tests/
 
 # frontend
@@ -69,22 +69,27 @@ npm run typecheck
 npm run dev           # proxies /api to localhost:8000
 ```
 
-Run the API against a local Postgres:
+Run the API against a local Postgres (a session secret is generated automatically):
 
 ```bash
 export TESQIVO_DB_URL=postgresql+asyncpg://tesqivo:tesqivo@localhost/tesqivo
 export TESQIVO_REDIS_URL=redis://localhost:6379/0
-export TESQIVO_SECRET_KEY=dev-secret-that-is-at-least-32-bytes-long
 export TESQIVO_PUBLIC_URL=http://localhost:8000
-export TESQIVO_BOOTSTRAP_TOKEN=dev-token
+export TESQIVO_SECRET_KEY_FILE=./.tesqivo-secret
 cd backend && alembic upgrade head && uvicorn app.main:app --reload
+```
+
+Full stack from source (builds the image locally):
+
+```bash
+make up        # docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build
 ```
 
 ## Backup / restore
 
 ```bash
 make backup                                   # → ./backups/
-make restore BACKUP=backups/db-XXXX.dump ATTACH=backups/attachments-XXXX.tgz
+make restore BACKUP=backups/db-XXXX.dump ATTACH=backups/appdata-XXXX.tgz
 ```
 
 ## License

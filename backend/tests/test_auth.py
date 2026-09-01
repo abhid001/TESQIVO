@@ -15,6 +15,33 @@ async def test_login_sets_httponly_cookie_and_me_works(client, admin):
 
 
 @pytest.mark.asyncio
+async def test_create_first_admin_needs_no_token_and_is_once_only(app):
+    from app.core.context import Ctx, Source
+    from app.core.db import get_sessionmaker
+    from app.core.errors import SetupAlreadyCompleted
+    from app.domain import auth
+
+    ctx = Ctx(correlation_id="cli", source=Source.system)
+    sm = get_sessionmaker()
+    async with sm() as s:
+        assert await auth.needs_setup(s) is True
+        user = await auth.create_first_admin(
+            s, ctx, username="root", email="Root@Example.com", display_name="", password="RootPassw0rd!"
+        )
+        assert user.is_system_admin is True
+        assert user.username == "root"
+        assert user.email == "root@example.com"
+        assert user.display_name == "root"  # blank display name falls back to username
+        assert await auth.needs_setup(s) is False
+
+    async with sm() as s:
+        with pytest.raises(SetupAlreadyCompleted):
+            await auth.create_first_admin(
+                s, ctx, username="second", email="b@x.com", display_name="B", password="SecondPass0!"
+            )
+
+
+@pytest.mark.asyncio
 async def test_bad_password_is_uniform_401(client, admin):
     r = await client.post("/api/v1/auth/session", json={"username": "admin", "password": "wrong"})
     assert r.status_code == 401

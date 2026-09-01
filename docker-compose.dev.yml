@@ -1,0 +1,30 @@
+name: tesqivo
+
+# Build-from-source override for contributors and CI. Use together with the base
+# file so a repo checkout runs without pulling a published image:
+#
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build
+#
+# (the Makefile's `make up` / `make down` / `make logs` already do this)
+
+services:
+  web:
+    build:
+      context: .
+      args:
+        TESQIVO_VERSION: dev
+    image: tesqivo-local
+    pull_policy: build
+    environment:
+      TESQIVO_ENVIRONMENT: development
+
+  worker:
+    build:
+      context: .
+      args:
+        TESQIVO_VERSION: dev
+    image: tesqivo-local
+    pull_policy: build
+    environment:
+      TESQIVO_ENVIRONMENT: development
+      TESQIVO_AUTO_MIGRATE: "0"

@@ -57,6 +57,48 @@ async def test_setup_status_and_gate(client):
 
 
 @pytest.mark.asyncio
+async def test_version_endpoint(client):
+    r = await client.get("/api/v1/version")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["version"]
+    assert body["environment"] == "test"
+
+
+@pytest.mark.asyncio
+async def test_spa_is_served_when_static_dir_is_configured(tmp_path, monkeypatch):
+    from httpx import ASGITransport, AsyncClient
+
+    from app.core.config import get_settings
+    from app.main import create_app
+
+    static = tmp_path / "static"
+    (static / "assets").mkdir(parents=True)
+    (static / "index.html").write_text('<!doctype html><html><body><div id="root"></div></body></html>')
+    (static / "assets" / "app.js").write_text("console.log(1)")
+
+    monkeypatch.setenv("TESQIVO_STATIC_DIR", str(static))
+    get_settings.cache_clear()
+    try:
+        app = create_app()
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://testserver") as c:
+            root = await c.get("/")
+            assert root.status_code == 200 and '<div id="root">' in root.text
+            # client-side route falls back to index.html
+            deep = await c.get("/p/DEMO/dashboard")
+            assert deep.status_code == 200 and deep.text.startswith("<!doctype html>")
+            # a real static file is served
+            assert (await c.get("/assets/app.js")).status_code == 200
+            # the API still wins and unknown API paths still 404 as JSON
+            assert (await c.get("/api/v1/healthz")).json() == {"status": "ok"}
+            missing = await c.get("/api/v1/nope")
+            assert missing.status_code == 404 and missing.json()["error"]["code"] == "RESOURCE_NOT_FOUND"
+    finally:
+        get_settings.cache_clear()
+
+
+@pytest.mark.asyncio
 async def test_error_envelope_shape(client):
     r = await client.get("/api/v1/auth/me")
     assert r.status_code == 401

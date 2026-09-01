@@ -3,33 +3,34 @@
 **Question answered:** What containers run, what persists, and how does a clean host come
 up healthy with a secure first admin? (PRS §15, §19.1)
 
+TESQIVO ships as a **single image** (`ghcr.io/abhid001/tesqivo`) that serves both the SPA
+(at `/`) and the API (at `/api/v1`). A self-hoster downloads one `docker-compose.yml` and
+runs `docker compose up -d` — no source checkout, no build, no `.env` required.
+
 ```mermaid
 flowchart TB
     subgraph host [Docker host - single node]
         subgraph net [tesqivo compose network]
-            proxy[caddy :80/:443\nserves SPA static\nproxies /api -> api]
-            api[api : uvicorn\nFastAPI /api/v1\nreadiness + liveness]
-            worker[worker : rq\njob handlers]
-            migrate[migrate : one-shot\nalembic upgrade head\nthen exit 0]
+            web[web : tesqivo image\nuvicorn - SPA at / + API at /api/v1\nentrypoint runs alembic upgrade head\nliveness + readiness]
+            worker[worker : same image\ncommand python -m app.worker\nTESQIVO_AUTO_MIGRATE=0]
             db[(postgres:16)]
             redis[(redis:7)]
         end
         vol_db[(pgdata volume)]
-        vol_blob[(attachments volume)]
-        vol_caddy[(caddy data volume)]
+        vol_app[(appdata volume\n/data: secret_key + attachments)]
     end
 
-    browser[Browser] --> proxy
-    proxy --> api
-    api --> db
-    api --> redis
-    api --> vol_blob
+    browser[Browser] --> web
+    web --> db
+    web --> redis
+    web --> vol_app
     worker --> db
     worker --> redis
-    worker --> vol_blob
-    migrate --> db
+    worker --> vol_app
     db --> vol_db
-    proxy --> vol_caddy
+
+    caddy[caddy - optional\ndocker-compose.tls.yml] -.->|:443| web
+    browser -.-> caddy
 ```
 
 ## Startup ordering
@@ -38,56 +39,77 @@ flowchart TB
 sequenceDiagram
     participant C as docker compose up
     participant DB as postgres
-    participant M as migrate (one-shot)
-    participant A as api
+    participant WEB as web
     participant W as worker
     C->>DB: start
     DB-->>C: healthcheck pg_isready OK
-    C->>M: start (depends_on db healthy)
-    M->>DB: alembic upgrade head
-    M->>DB: seed reference data / formula_version row
-    M-->>C: exit 0
-    C->>A: start (depends_on migrate completed_successfully)
-    A->>DB: connect, run readiness probe
-    A->>A: if no user exists AND TESQIVO_BOOTSTRAP_TOKEN set -> enable one-time /setup
-    C->>W: start (depends_on migrate completed_successfully)
-    Note over A,W: /healthz liveness, /readyz checks db + redis + migration head
+    C->>WEB: start (depends_on db + redis healthy)
+    WEB->>WEB: entrypoint: wait-db, then alembic upgrade head (idempotent)
+    WEB->>WEB: resolve secret key (env > /data/secret_key > generate + persist)
+    WEB->>DB: connect, readiness probe
+    C->>W: start (depends_on web started, redis healthy)
+    W->>W: entrypoint skips migrations (TESQIVO_AUTO_MIGRATE=0)
+    Note over WEB,W: /healthz liveness, /readyz checks db, /version reports the build
 ```
 
-## Configuration contract (fail fast on missing — PRS §15)
+## First-admin flow
 
-| Var | Purpose | Required |
+**Preferred — CLI (no token):** shell access to the container is the authorization gate.
+
+```
+docker compose exec web python -m app.cli create-admin
+```
+
+Prompts for username / email / display name / password, or takes
+`--username --email --password [--display-name]` for automation. Works only while zero
+users exist.
+
+**Alternative — browser:** set `TESQIVO_BOOTSTRAP_TOKEN` to a strong random value, open the
+app, and complete the "create first administrator" screen. `GET /api/v1/setup/status`
+returns `{needs_setup: true}` only while zero users exist; `POST /api/v1/setup` with the
+`X-Bootstrap-Token` header creates the admin. Any later call → `409 SETUP_ALREADY_COMPLETED`.
+
+## Configuration contract
+
+Nothing is required for a local trial. Missing/invalid **`TESQIVO_DB_URL`**,
+**`TESQIVO_REDIS_URL`** or **`TESQIVO_PUBLIC_URL`** → the process refuses to start with a
+single clear log line naming the variable (no stack trace, no secret echo). The bundled
+compose file supplies working defaults for all three.
+
+| Var | Purpose | Default |
 |---|---|---|
-| `TESQIVO_DB_URL` | Postgres DSN | yes |
-| `TESQIVO_REDIS_URL` | Redis DSN | yes |
-| `TESQIVO_SECRET_KEY` | session signing / CSRF | yes (>= 32 bytes) |
-| `TESQIVO_BOOTSTRAP_TOKEN` | one-time first-admin setup gate | yes on first boot |
-| `TESQIVO_PUBLIC_URL` | absolute base URL for cookies / links | yes |
-| `TESQIVO_ATTACHMENT_DIR` | blob volume mount | default `/data/attachments` |
-| `TESQIVO_MAX_UPLOAD_MB` | per-file cap | default 25 |
-| `TESQIVO_SESSION_TTL_HOURS` | session expiry | default 12 |
+| `TESQIVO_DB_URL` | Postgres DSN | from compose (`db` service) |
+| `TESQIVO_REDIS_URL` | Redis DSN | from compose (`redis` service) |
+| `TESQIVO_PUBLIC_URL` | absolute base URL for cookies / links | `http://localhost:8080` |
+| `TESQIVO_SECRET_KEY` | session signing / CSRF (≥32 bytes) | auto-generated into `/data/secret_key` |
+| `TESQIVO_SECRET_KEY_FILE` | where the generated secret is persisted | `/data/secret_key` |
+| `TESQIVO_STATIC_DIR` | built web UI to serve at `/` | `/app/static` (set by the image) |
+| `TESQIVO_AUTO_MIGRATE` | entrypoint runs `alembic upgrade head` | `1` (`0` for the worker) |
+| `TESQIVO_BOOTSTRAP_TOKEN` | optional gate for the browser setup screen | unset |
+| `TESQIVO_ATTACHMENT_DIR` | blob directory | `/data/attachments` |
+| `POSTGRES_PASSWORD` | bundled database password | `tesqivo` |
+| `TESQIVO_HTTP_PORT` | host port the app publishes on | `8080` |
 
-Missing/invalid required config → API refuses to start with a single clear log line
-naming the variable. No stack trace, no secret echo.
+## Persistence, backup, restore
 
-## First-admin flow (secure — PRS §19.1)
-
-1. Operator sets `TESQIVO_BOOTSTRAP_TOKEN` to a strong random value in `.env`.
-2. `GET /api/v1/setup/status` → `{needs_setup: true}` only while zero users exist.
-3. `POST /api/v1/setup` with header `X-Bootstrap-Token` + admin username/password
-   (Argon2id min length enforced). Creates the System Admin, invalidates setup.
-4. Any later call to `/setup` → `409` `SETUP_ALREADY_COMPLETED`.
-
-## Persistence, backup, restore (PRS §15)
-
-- `pgdata` and `attachments` are named volumes.
-- `make backup` → `pg_dump -Fc` + `tar` of attachments → timestamped `./backups/`.
-- `make restore BACKUP=<file>` → drop/recreate schema, `pg_restore`, untar attachments,
-  run `alembic upgrade head`.
-- Restore is exercised by an automated test in CI against a fresh compose stack
-  (acceptance §19.10). Targets: RPO 24h, RTO 4h.
+- Two named volumes: `pgdata` (database) and `appdata` (`/data` — the generated secret key
+  and uploaded attachments).
+- `make backup` → `pg_dump -Fc` + a `tar` of the `appdata` volume → timestamped `./backups/`.
+- `make restore BACKUP=<db dump> [ATTACH=<appdata tgz>]` → `pg_restore --clean`, restore the
+  volume, restart `web` (its entrypoint reapplies `alembic upgrade head`).
+- Raw commands (no repo checkout) are in `docs/self-hosting.md`.
 
 ## Upgrade
 
-`docker compose pull && docker compose up -d` re-runs the `migrate` one-shot; API waits
-for it. Migration compatibility policy documented in `docs/OPERATIONS.md`.
+```
+docker compose pull && docker compose up -d
+```
+
+The `web` entrypoint reapplies `alembic upgrade head` on start — migrations are
+inspector-guarded and idempotent. Confirm with `GET /api/v1/version`.
+
+## Optional TLS
+
+`docker compose -f docker-compose.yml -f docker-compose.tls.yml up -d` adds a Caddy service
+that obtains and renews a Let's Encrypt certificate for `$TESQIVO_DOMAIN`. Users who
+already run a reverse proxy point it at the `web` container's published port instead.

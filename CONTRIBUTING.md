@@ -23,10 +23,15 @@ cd backend && python3 -m venv .venv && .venv/bin/pip install -e ".[dev]"
 # frontend
 cd frontend && npm install && npm run test && npm run typecheck
 
-# full stack
-cp .env.example .env   # fill in the two required secrets
-docker compose up -d --build
+# full stack, built from source (no published image, no .env needed)
+make up        # docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build
+make logs
+make down
 ```
+
+The base `docker-compose.yml` pulls the published `ghcr.io/abhid001/tesqivo` image and is
+what self-hosters use. `docker-compose.dev.yml` overrides `web`/`worker` to build from the
+root `Dockerfile`; always test through `make up` before opening a PR.
 
 ## Rules for implementation changes (PRS §21)
 
@@ -52,9 +57,21 @@ docker compose up -d --build
 - Conventional-commit style subject (`feat(backend): …`, `fix(web): …`, `docs: …`).
 - Reference the PRS section or increment number where relevant.
 - PRs must pass `ci.yml` (lint, backend tests on SQLite + PostgreSQL, migration
-  round-trip, frontend typecheck/test/build, and a Compose smoke boot).
+  round-trip, frontend typecheck/test/build, an image build, and a Compose smoke boot
+  that also runs `create-admin`).
 
-## Versioning
+## Versioning & releases
 
-Semantic versioning. API compatibility and migration policy: see
-`docs/OPERATIONS.md`.
+Semantic versioning. API compatibility and migration policy: see `docs/OPERATIONS.md`.
+
+To cut a release:
+
+1. Bump `version` in `backend/pyproject.toml` and `__version__` in
+   `backend/app/__init__.py`, and move the `CHANGELOG.md` "Unreleased" notes under the new
+   version heading.
+2. Merge to `main`, then tag: `git tag v0.2.0 && git push origin v0.2.0`.
+3. `.github/workflows/release.yml` builds and pushes
+   `ghcr.io/abhid001/tesqivo:{v0.2.0, 0.2, latest}` (multi-arch). `main` pushes also
+   publish `:edge`.
+4. **First release only:** set the GHCR package visibility to *public*
+   (repo → Packages → tesqivo → Package settings).

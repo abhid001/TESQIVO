@@ -49,7 +49,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
 
     async def dispatch(self, request: Request, call_next):
         settings = get_settings()
-        if settings.is_test:
+        if settings.is_test or not request.url.path.startswith("/api/"):
             return await call_next(request)
         limit = settings.rate_limit_per_minute
         if request.url.path.startswith("/api/v1/auth"):
