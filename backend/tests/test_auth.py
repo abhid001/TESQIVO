@@ -22,6 +22,16 @@ async def test_bad_password_is_uniform_401(client, admin):
 
 
 @pytest.mark.asyncio
+async def test_username_login_is_case_insensitive(client, admin):
+    for name in ("ADMIN", "Admin", "  admin  "):
+        r = await client.post(
+            "/api/v1/auth/session", json={"username": name, "password": "AdminPassw0rd!"}
+        )
+        assert r.status_code == 201, f"{name!r}: {r.text}"
+        assert r.json()["username"] == "admin"
+
+
+@pytest.mark.asyncio
 async def test_lockout_after_threshold(client, admin):
     for _ in range(5):
         await client.post("/api/v1/auth/session", json={"username": "admin", "password": "nope"})
@@ -64,13 +74,39 @@ async def test_admin_initiated_password_reset(client, admin, api):
     uid = r.json()["id"]
     r = await api.post(f"/api/v1/users/{uid}/password-reset")
     assert r.status_code == 201
-    token = r.json()["reset_token"]
+    temp = r.json()["temporary_password"]
 
+    # old password no longer works
+    r = await client.post("/api/v1/auth/session", json={"username": "tester2", "password": "TesterPass0!"})
+    assert r.status_code == 401
+
+    # temp password logs in directly and forces a change
+    r = await client.post("/api/v1/auth/session", json={"username": "tester2", "password": temp})
+    assert r.status_code == 201, r.text
+    assert r.json()["must_change_password"] is True
+
+    csrf = client.cookies.get("tesqivo_csrf")
     r = await client.post(
-        "/api/v1/auth/password-reset/complete",
-        json={"token": token, "new_password": "BrandNewPass9!"},
+        "/api/v1/auth/password",
+        json={"current_password": temp, "new_password": "BrandNewPass9!"},
+        headers={"X-CSRF-Token": csrf, "X-Tesqivo-Client": "web"},
     )
     assert r.status_code == 204
 
     r = await client.post("/api/v1/auth/session", json={"username": "tester2", "password": "BrandNewPass9!"})
     assert r.status_code == 201
+
+
+@pytest.mark.asyncio
+async def test_admin_sets_user_password_directly(client, admin, api):
+    r = await api.post(
+        "/api/v1/users",
+        json={"username": "tester3", "email": "t3@x.com", "display_name": "T3", "password": "TesterPass0!"},
+    )
+    uid = r.json()["id"]
+    r = await api.patch(f"/api/v1/users/{uid}", json={"password": "AdminSetPass77!"})
+    assert r.status_code == 200, r.text
+
+    r = await client.post("/api/v1/auth/session", json={"username": "tester3", "password": "AdminSetPass77!"})
+    assert r.status_code == 201, r.text
+    assert r.json()["must_change_password"] is False

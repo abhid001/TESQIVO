@@ -5,6 +5,7 @@ import { http } from "../api/client";
 import { useProject } from "../api/hooks";
 import type { Paginated, Plan, TestCase } from "../api/types";
 import { Badge, Dialog, EmptyState, Field, errText, useToast } from "../ui";
+import { Icons } from "../components/icons";
 
 export function PlansPage() {
   const { projectKey } = useParams();
@@ -15,6 +16,8 @@ export function PlansPage() {
   const [creating, setCreating] = useState(false);
   const [name, setName] = useState("");
   const [scopeFor, setScopeFor] = useState<Plan | null>(null);
+  const [editFor, setEditFor] = useState<Plan | null>(null);
+  const [delFor, setDelFor] = useState<Plan | null>(null);
 
   const plans = useQuery({
     queryKey: ["plans", pid],
@@ -39,13 +42,27 @@ export function PlansPage() {
     onSuccess: (_d, v) => { qc.invalidateQueries({ queryKey: ["plans"] }); toast(`Plan ${v.to}`); },
     onError: (e) => toast(errText(e), "error"),
   });
+  const rename = useMutation({
+    mutationFn: ({ plan, newName }: { plan: Plan; newName: string }) =>
+      http.patch(`/plans/${plan.id}`, { expected_version: plan.version, name: newName }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["plans"] }); setEditFor(null); toast("Plan updated"); },
+    onError: (e) => toast(errText(e), "error"),
+  });
+  const remove = useMutation({
+    mutationFn: (plan: Plan) => http.del(`/plans/${plan.id}`),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["plans"] }); setDelFor(null); toast("Plan deleted"); },
+    onError: (e) => toast(errText(e), "error"),
+  });
 
   if (!project) return <p>Loading…</p>;
 
   return (
     <>
       <div className="page-header">
-        <h2>Plans</h2>
+        <div>
+          <h2>Test Plans</h2>
+          <div className="page-sub">Plan test scope across releases and teams</div>
+        </div>
         <button className="primary" onClick={() => setCreating(true)}>
           New plan
         </button>
@@ -70,17 +87,19 @@ export function PlansPage() {
                     <Badge value={p.status} />
                   </td>
                   <td className="inline-actions">
-                    <button onClick={() => setScopeFor(p)}>Scope</button>
+                    <button className="sm" onClick={() => setScopeFor(p)}>Scope</button>
                     {p.status === "draft" && (
-                      <button onClick={() => transition.mutate({ plan: p, to: "active" })}>
+                      <button className="sm" onClick={() => transition.mutate({ plan: p, to: "active" })}>
                         Activate
                       </button>
                     )}
                     {p.status === "active" && (
-                      <button onClick={() => transition.mutate({ plan: p, to: "completed" })}>
+                      <button className="sm" onClick={() => transition.mutate({ plan: p, to: "completed" })}>
                         Complete
                       </button>
                     )}
+                    <button className="icon-btn" title="Rename" onClick={() => setEditFor(p)}>{Icons.edit}</button>
+                    <button className="icon-btn warn" title="Delete" onClick={() => setDelFor(p)}>{Icons.trash}</button>
                   </td>
                 </tr>
               ))}
@@ -105,7 +124,31 @@ export function PlansPage() {
       {scopeFor && pid && (
         <ScopeDialog planId={scopeFor.id} projectId={pid} onClose={() => setScopeFor(null)} />
       )}
+
+      {editFor && (
+        <RenamePlanDialog plan={editFor} busy={rename.isPending} onClose={() => setEditFor(null)}
+          onSave={(newName) => rename.mutate({ plan: editFor, newName })} />
+      )}
+      {delFor && (
+        <Dialog title="Delete plan" onClose={() => setDelFor(null)}>
+          <p>Delete <strong className="key">{delFor.key}</strong> — “{delFor.name}”? Plans with execution cycles can’t be deleted.</p>
+          <div className="inline-actions" style={{ marginTop: 14 }}>
+            <button className="danger" disabled={remove.isPending} onClick={() => remove.mutate(delFor)}>Delete</button>
+            <button onClick={() => setDelFor(null)}>Cancel</button>
+          </div>
+        </Dialog>
+      )}
     </>
+  );
+}
+
+function RenamePlanDialog({ plan, busy, onClose, onSave }: { plan: Plan; busy: boolean; onClose: () => void; onSave: (n: string) => void }) {
+  const [v, setV] = useState(plan.name);
+  return (
+    <Dialog title={`Rename ${plan.key}`} onClose={onClose}>
+      <Field label="Name"><input value={v} onChange={(e) => setV(e.target.value)} autoFocus /></Field>
+      <button className="primary" disabled={!v.trim() || busy} onClick={() => onSave(v)}>Save</button>
+    </Dialog>
   );
 }
 

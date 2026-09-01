@@ -126,6 +126,68 @@ class ProjectMembership(UUIDMixin, Base):
     )
 
 
+class ProjectAccessRequest(UUIDMixin, TimestampMixin, Base):
+    """A user asking to be granted membership in a project they can see but aren't in."""
+
+    __tablename__ = "project_access_request"
+
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("app_user.id"), nullable=False, index=True)
+    project_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("project.id"), nullable=False, index=True)
+    requested_role: Mapped[str] = mapped_column(String(20), default="tester", nullable=False)
+    message: Mapped[str | None] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(String(16), default="pending", nullable=False)
+    decided_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("app_user.id"))
+    decided_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
+
+    __table_args__ = (
+        CheckConstraint(
+            "status in ('pending','approved','denied')", name="access_request_status_valid"
+        ),
+    )
+
+
+class Notification(UUIDMixin, Base):
+    """A per-user inbox item (new feedback, access requests, …)."""
+
+    __tablename__ = "notification"
+
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("app_user.id"), nullable=False, index=True)
+    kind: Mapped[str] = mapped_column(String(24), nullable=False)
+    title: Mapped[str] = mapped_column(String(200), nullable=False)
+    body: Mapped[str | None] = mapped_column(String(500))
+    link: Mapped[str | None] = mapped_column(String(200))
+    ref_id: Mapped[uuid.UUID | None] = mapped_column()
+    created_at: Mapped[datetime] = mapped_column(
+        UTCDateTime, server_default=func.now(), nullable=False, index=True
+    )
+    read_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
+
+
+class Feedback(UUIDMixin, TimestampMixin, Base):
+    """Product feedback from any signed-in user; triaged by a system administrator."""
+
+    __tablename__ = "feedback"
+
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("app_user.id"), nullable=False, index=True)
+    project_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("project.id"), index=True)
+    category: Mapped[str] = mapped_column(String(16), default="other", nullable=False)
+    message: Mapped[str] = mapped_column(Text, nullable=False)
+    page_path: Mapped[str | None] = mapped_column(String(400))
+    status: Mapped[str] = mapped_column(String(16), default="open", nullable=False)
+    admin_note: Mapped[str | None] = mapped_column(Text)
+    resolved_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("app_user.id"))
+    resolved_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
+
+    __table_args__ = (
+        CheckConstraint(
+            "category in ('bug','idea','question','other')", name="feedback_category_valid"
+        ),
+        CheckConstraint(
+            "status in ('open','reviewing','resolved')", name="feedback_status_valid"
+        ),
+    )
+
+
 class ReferenceValue(UUIDMixin, TimestampMixin, Base):
     __tablename__ = "reference_value"
 
@@ -273,11 +335,13 @@ class Requirement(UUIDMixin, TimestampMixin, Base):
     key: Mapped[str] = mapped_column(String(32), unique=True, nullable=False)
     title: Mapped[str] = mapped_column(String(300), nullable=False)
     description: Mapped[str | None] = mapped_column(Text)
+    acceptance_criteria: Mapped[str | None] = mapped_column(Text)
     req_type: Mapped[str] = mapped_column(String(32), default="functional", nullable=False)
     status: Mapped[str] = mapped_column(String(16), default="draft", nullable=False)
     priority: Mapped[str] = mapped_column(String(16), default="medium", nullable=False)
     owner_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("app_user.id"))
     component: Mapped[str | None] = mapped_column(String(120))
+    labels: Mapped[str | None] = mapped_column(String(400))
     release_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("release.id"), index=True)
     source_type: Mapped[str] = mapped_column(String(16), default="manual", nullable=False)
     external_reference: Mapped[str | None] = mapped_column(String(400))

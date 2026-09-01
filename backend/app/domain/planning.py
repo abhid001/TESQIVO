@@ -10,7 +10,7 @@ from __future__ import annotations
 import uuid
 from datetime import UTC, datetime
 
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.context import Actor, Ctx
@@ -168,6 +168,49 @@ async def transition_plan(
     )
     await session.commit()
     return plan
+
+
+async def update_plan(
+    session: AsyncSession, actor: Actor, ctx: Ctx, *, plan_id: uuid.UUID,
+    expected_version: int, name: str | None = None, description: str | None = None,
+) -> TestPlan:
+    plan = await _get_plan(session, plan_id)
+    authz.authorize(actor, "plan.manage", project_id=plan.project_id)
+    check_version(plan.version, expected_version, entity="plan")
+    if name is not None:
+        if not name.strip():
+            raise ValidationFailed("Name must not be empty.")
+        plan.name = name.strip()
+    if description is not None:
+        plan.description = description or None
+    plan.version += 1
+    audit.record(
+        session, actor=actor, ctx=ctx, entity_type="test_plan", action="plan.updated",
+        entity_id=plan.id, entity_key=plan.key, project_id=plan.project_id, after={"name": plan.name},
+    )
+    await session.commit()
+    return plan
+
+
+async def delete_plan(
+    session: AsyncSession, actor: Actor, ctx: Ctx, *, plan_id: uuid.UUID
+) -> None:
+    plan = await _get_plan(session, plan_id)
+    authz.authorize(actor, "plan.delete", project_id=plan.project_id)
+    cycle_count = await session.scalar(
+        select(func.count()).select_from(TestCycle).where(TestCycle.plan_id == plan_id)
+    )
+    if cycle_count:
+        raise ValidationFailed(
+            "This plan has execution cycles. Delete or archive the cycles first."
+        )
+    await session.execute(delete(PlanScopeItem).where(PlanScopeItem.plan_id == plan_id))
+    audit.record(
+        session, actor=actor, ctx=ctx, entity_type="test_plan", action="plan.deleted",
+        entity_id=plan.id, entity_key=plan.key, project_id=plan.project_id, before={"name": plan.name},
+    )
+    await session.delete(plan)
+    await session.commit()
 
 
 # --------------------------------------------------------------------------- cycles

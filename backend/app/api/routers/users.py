@@ -8,7 +8,7 @@ from sqlalchemy import select
 
 from app.api.deps import CurrentActor, DbSession, RequestCtx
 from app.core.errors import Forbidden
-from app.domain import auth
+from app.domain import access, auth
 from app.models import User
 
 router = APIRouter(prefix="/users", tags=["users"])
@@ -35,9 +35,15 @@ class StatusRequest(BaseModel):
     status: str
 
 
+class UpdateUserRequest(BaseModel):
+    display_name: str | None = None
+    email: EmailStr | None = None
+    password: str | None = Field(default=None, min_length=12, max_length=256)
+
+
 class ResetOut(BaseModel):
-    reset_token: str
-    note: str = "Deliver this token to the user out-of-band. It expires in 24 hours."
+    temporary_password: str
+    note: str = "The user signs in with this password and must set a new one immediately."
 
 
 def _out(u: User) -> UserOut:
@@ -88,11 +94,53 @@ async def set_status(
     return _out(user)
 
 
+@router.patch("/{user_id}", response_model=UserOut)
+async def update_user(
+    user_id: str, body: UpdateUserRequest, actor: CurrentActor, db: DbSession, ctx: RequestCtx
+) -> UserOut:
+    import uuid
+
+    user = await auth.update_user(
+        db, actor, ctx, user_id=uuid.UUID(user_id),
+        display_name=body.display_name, email=body.email, password=body.password,
+    )
+    return _out(user)
+
+
+@router.delete("/{user_id}", status_code=204)
+async def delete_user(user_id: str, actor: CurrentActor, db: DbSession, ctx: RequestCtx):
+    import uuid
+
+    await auth.delete_user(db, actor, ctx, user_id=uuid.UUID(user_id))
+
+
+class UserMembershipOut(BaseModel):
+    project_id: str
+    project_key: str
+    project_name: str
+    role: str
+
+
+@router.get("/{user_id}/memberships", response_model=list[UserMembershipOut])
+async def user_memberships(
+    user_id: str, actor: CurrentActor, db: DbSession
+) -> list[UserMembershipOut]:
+    import uuid
+
+    rows = await access.user_memberships(db, actor, user_id=uuid.UUID(user_id))
+    return [
+        UserMembershipOut(
+            project_id=str(p.id), project_key=p.key, project_name=p.name, role=m.role
+        )
+        for (m, p) in rows
+    ]
+
+
 @router.post("/{user_id}/password-reset", response_model=ResetOut, status_code=201)
 async def initiate_reset(
     user_id: str, actor: CurrentActor, db: DbSession, ctx: RequestCtx
 ) -> ResetOut:
     import uuid
 
-    token = await auth.initiate_password_reset(db, actor, ctx, user_id=uuid.UUID(user_id))
-    return ResetOut(reset_token=token)
+    temp = await auth.initiate_password_reset(db, actor, ctx, user_id=uuid.UUID(user_id))
+    return ResetOut(temporary_password=temp)

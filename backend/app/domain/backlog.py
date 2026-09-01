@@ -9,7 +9,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 
-from sqlalchemy import func, select
+from sqlalchemy import and_, delete, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.context import Actor, Ctx
@@ -17,7 +17,7 @@ from app.core.errors import ResourceNotFound, StateTransitionNotAllowed, Validat
 from app.domain import audit, authz
 from app.domain.concurrency import check_version
 from app.domain.keys import next_key
-from app.models import Defect, Project, Release, Requirement
+from app.models import Defect, Project, Release, Requirement, Scenario, TraceLink
 
 REQ_STATES = ("draft", "active", "fulfilled", "archived")
 REQ_TRANSITIONS = {
@@ -58,19 +58,57 @@ async def _check_release(session: AsyncSession, project_id: uuid.UUID, release_i
 # --------------------------------------------------------------------------- requirements
 
 
+_PRIORITIES = ("critical", "high", "medium", "low")
+_REQ_TYPES = ("functional", "non_functional", "compliance", "ux", "performance", "security")
+_SOURCE_TYPES = ("manual", "import", "jira", "confluence", "email", "other")
+UNSET = object()
+
+
+async def _resolve_owner(
+    session: AsyncSession, project_id: uuid.UUID, owner_id: uuid.UUID | None
+) -> uuid.UUID | None:
+    if owner_id is None:
+        return None
+    from app.models import ProjectMembership
+
+    member = await session.scalar(
+        select(ProjectMembership).where(
+            ProjectMembership.project_id == project_id,
+            ProjectMembership.user_id == owner_id,
+            ProjectMembership.status == "active",
+        )
+    )
+    if member is None:
+        raise ValidationFailed("Owner must be a member of this project.")
+    return owner_id
+
+
 async def create_requirement(
     session: AsyncSession, actor: Actor, ctx: Ctx, *, project_id: uuid.UUID,
-    title: str, description: str | None = None, req_type: str = "functional",
-    priority: str = "medium", component: str | None = None, release_id: uuid.UUID | None = None,
+    title: str, description: str | None = None, acceptance_criteria: str | None = None,
+    req_type: str = "functional", priority: str = "medium", status: str = "draft",
+    component: str | None = None, labels: str | None = None,
+    owner_id: uuid.UUID | None = None, source_type: str = "manual",
+    external_reference: str | None = None, release_id: uuid.UUID | None = None,
 ) -> Requirement:
     await _project(session, project_id)
     authz.authorize(actor, "requirement.manage", project_id=project_id)
     await _check_release(session, project_id, release_id)
+    if priority not in _PRIORITIES:
+        raise ValidationFailed(f"Invalid priority '{priority}'.")
+    if status not in ("draft", "active"):
+        raise ValidationFailed("A new requirement can only start in 'draft' or 'active'.")
+    owner_id = await _resolve_owner(session, project_id, owner_id) if owner_id else actor.id
     req = Requirement(
         project_id=project_id, key=await next_key(session, project_id, "requirement"),
-        title=title.strip(), description=description, req_type=req_type, priority=priority,
-        component=component, release_id=release_id, owner_id=actor.id, created_by=actor.id,
-        status="draft",
+        title=title.strip(), description=description or None,
+        acceptance_criteria=acceptance_criteria or None,
+        req_type=req_type, priority=priority, status=status,
+        component=component or None, labels=labels or None,
+        owner_id=owner_id, created_by=actor.id,
+        source_type=source_type if source_type in _SOURCE_TYPES else "manual",
+        external_reference=external_reference or None,
+        release_id=release_id,
     )
     session.add(req)
     await session.flush()
@@ -78,6 +116,85 @@ async def create_requirement(
                  entity_id=req.id, entity_key=req.key, project_id=project_id, after={"title": req.title})
     await session.commit()
     return req
+
+
+async def update_requirement(
+    session: AsyncSession, actor: Actor, ctx: Ctx, *, requirement_id: uuid.UUID,
+    expected_version: int, title: str | None = None, description: str | None = None,
+    acceptance_criteria: str | None = None, priority: str | None = None,
+    req_type: str | None = None, status: str | None = None,
+    component: str | None = None, labels: str | None = None,
+    owner_id: uuid.UUID | None | object = UNSET, source_type: str | None = None,
+    external_reference: str | None = None, release_id: uuid.UUID | None | object = UNSET,
+) -> Requirement:
+    req = await session.get(Requirement, requirement_id)
+    if req is None:
+        raise ResourceNotFound("Requirement not found.")
+    authz.authorize(actor, "requirement.manage", project_id=req.project_id)
+    check_version(req.version, expected_version, entity="requirement")
+    if title is not None:
+        if not title.strip():
+            raise ValidationFailed("Title must not be empty.")
+        req.title = title.strip()
+    if description is not None:
+        req.description = description or None
+    if acceptance_criteria is not None:
+        req.acceptance_criteria = acceptance_criteria or None
+    if priority is not None:
+        if priority not in _PRIORITIES:
+            raise ValidationFailed(f"Invalid priority '{priority}'.")
+        req.priority = priority
+    if req_type is not None:
+        req.req_type = req_type
+    if component is not None:
+        req.component = component or None
+    if labels is not None:
+        req.labels = labels or None
+    if source_type is not None and source_type in _SOURCE_TYPES:
+        req.source_type = source_type
+    if external_reference is not None:
+        req.external_reference = external_reference or None
+    if owner_id is not UNSET:
+        req.owner_id = await _resolve_owner(session, req.project_id, owner_id)  # type: ignore[arg-type]
+    if release_id is not UNSET:
+        await _check_release(session, req.project_id, release_id)  # type: ignore[arg-type]
+        req.release_id = release_id  # type: ignore[assignment]
+    if status is not None and status != req.status:
+        if (req.status, status) not in REQ_TRANSITIONS:
+            raise StateTransitionNotAllowed(
+                f"Cannot move requirement from '{req.status}' to '{status}'."
+            )
+        req.status = status
+    req.version += 1
+    audit.record(session, actor=actor, ctx=ctx, entity_type="requirement", action="requirement.updated",
+                 entity_id=req.id, entity_key=req.key, project_id=req.project_id, after={"title": req.title})
+    await session.commit()
+    return req
+
+
+async def delete_requirement(
+    session: AsyncSession, actor: Actor, ctx: Ctx, *, requirement_id: uuid.UUID
+) -> None:
+    req = await session.get(Requirement, requirement_id)
+    if req is None:
+        raise ResourceNotFound("Requirement not found.")
+    authz.authorize(actor, "requirement.delete", project_id=req.project_id)
+    await session.execute(
+        delete(TraceLink).where(
+            or_(
+                and_(TraceLink.source_type == "requirement", TraceLink.source_id == req.id),
+                and_(TraceLink.target_type == "requirement", TraceLink.target_id == req.id),
+            )
+        )
+    )
+    await session.execute(
+        update(Scenario).where(Scenario.requirement_id == req.id).values(requirement_id=None)
+    )
+    audit.record(session, actor=actor, ctx=ctx, entity_type="requirement", action="requirement.deleted",
+                 entity_id=req.id, entity_key=req.key, project_id=req.project_id,
+                 before={"title": req.title})
+    await session.delete(req)
+    await session.commit()
 
 
 async def transition_requirement(

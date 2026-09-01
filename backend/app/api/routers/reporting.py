@@ -10,7 +10,7 @@ from fastapi import APIRouter
 from fastapi.responses import StreamingResponse
 
 from app.api.deps import CurrentActor, DbSession
-from app.domain import reporting
+from app.domain import audit, reporting
 from app.domain.reporting import Scope
 
 router = APIRouter(tags=["reporting"])
@@ -51,6 +51,16 @@ async def release_overview(project_id: str, actor: CurrentActor, db: DbSession) 
     return {"releases": await reporting.release_overview(db, actor, uuid.UUID(project_id))}
 
 
+@router.get("/projects/{project_id}/reports/execution-trend")
+async def execution_trend(
+    project_id: str, actor: CurrentActor, db: DbSession,
+    release_id: str | None = None, cycle_id: str | None = None,
+    environment: str | None = None, days: int = 30,
+) -> dict:
+    scope = _scope(project_id, release_id, None, cycle_id, environment, None)
+    return await reporting.execution_trend(db, actor, scope, days=days)
+
+
 @router.get("/projects/{project_id}/reports/cycle-breakdown")
 async def cycle_breakdown(
     project_id: str, actor: CurrentActor, db: DbSession,
@@ -59,6 +69,16 @@ async def cycle_breakdown(
 ) -> dict:
     scope = _scope(project_id, release_id, plan_id, cycle_id, environment, build)
     return {"cycles": await reporting.cycle_breakdown(db, actor, scope)}
+
+
+@router.get("/projects/{project_id}/activity")
+async def project_activity(
+    project_id: str, actor: CurrentActor, db: DbSession, limit: int = 15
+) -> dict:
+    items = await audit.recent_activity(
+        db, actor, project_id=uuid.UUID(project_id), limit=limit
+    )
+    return {"items": items}
 
 
 @router.get("/projects/{project_id}/reports/summary.csv")

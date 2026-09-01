@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 
 const wrap = (path: ReactNode) => (
-  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ overflow: "visible" }}>
     {path}
   </svg>
 );
@@ -89,6 +89,55 @@ export const Icons = {
     <>
       <path d="M3 12a9 9 0 1 0 3-6.7" />
       <path d="M3 4v5h5" />
+    </>,
+  ),
+  bug: wrap(
+    <>
+      <rect x="8" y="6" width="8" height="14" rx="4" />
+      <path d="M19 7l-3 2M5 7l3 2M19 13h-3M5 13h3M19 19l-3-2M5 19l3-2M12 3v3" />
+    </>,
+  ),
+  robot: wrap(
+    <>
+      <rect x="4" y="8" width="16" height="12" rx="2" />
+      <path d="M12 4v4M9 14h.01M15 14h.01M2 13v3M22 13v3" />
+    </>,
+  ),
+  check: wrap(
+    <>
+      <path d="M20 6L9 17l-5-5" />
+    </>,
+  ),
+  gauge: wrap(
+    <>
+      <path d="M12 13l4-4" />
+      <path d="M3 12a9 9 0 1 1 18 0" />
+    </>,
+  ),
+  requirements: wrap(
+    <>
+      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+      <path d="M14 2v6h6" />
+      <path d="M8 13h8M8 17h8M8 9h2" />
+    </>,
+  ),
+  play: wrap(<path d="M7 4v16l13-8z" />),
+  playCircle: wrap(
+    <>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M10 8.5v7l6-3.5z" fill="currentColor" stroke="none" />
+    </>,
+  ),
+  checkCircle: wrap(
+    <>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M8.5 12.5l2.5 2.5 4.5-5" />
+    </>,
+  ),
+  reports: wrap(
+    <>
+      <path d="M4 4v16h16" />
+      <path d="M8 16v-4M12 16V8M16 16v-7" />
     </>,
   ),
 };

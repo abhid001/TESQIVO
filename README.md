@@ -28,8 +28,10 @@ This repository implements the **Phase 1 vertical slice** (PRS §18 increments 1
 | 11 | CSV import (map / validate / strict-partial / error files) | 🟡 sequence designed (`docs/architecture/12`), not implemented |
 | 12 | Operational hardening (backup/restore automation test, image scan, perf) | 🟡 `make backup`/`restore` + Compose; automated restore test pending |
 
-Frontend: React SPA covering Dashboard, Repository, Plans, Cycles, Execution Runner,
-Traceability, and Requirements/Defects.
+Frontend: React SPA covering Dashboard, Requirements, Plans, Scenarios, Tests,
+Releases, Cycles, Execution Runner, and Traceability — plus an admin console
+(users, projects, access requests, feedback), self-service project discovery /
+access requests, per-user profile, and an always-on feedback channel.
 
 **Handing it to a tester?** See [`docs/TESTING_GUIDE.md`](docs/TESTING_GUIDE.md) —
 end-to-end steps to stand it up, create tester accounts, and a suggested walkthrough.

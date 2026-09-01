@@ -27,6 +27,7 @@ class MeOut(BaseModel):
     id: str
     username: str
     display_name: str
+    email: str
     is_system_admin: bool
     must_change_password: bool
     memberships: list[MembershipOut]
@@ -127,6 +128,7 @@ def _me(actor) -> MeOut:
         id=str(actor.id),
         username=actor.username,
         display_name=actor.display_name,
+        email=actor.email,
         is_system_admin=actor.is_system_admin,
         must_change_password=actor.must_change_password,
         memberships=[

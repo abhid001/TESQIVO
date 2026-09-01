@@ -66,6 +66,7 @@ class TestCaseOut(BaseModel):
     project_id: str
     folder_id: str | None
     scenario_id: str | None
+    plan_keys: list[str] = []
     title: str
     lifecycle_state: str
     current_version_id: str | None
@@ -82,13 +83,14 @@ class FolderOut(BaseModel):
     path: str
 
 
-def _tc_out(tc: TestCase) -> TestCaseOut:
+def _tc_out(tc: TestCase, plan_keys: list[str] | None = None) -> TestCaseOut:
     return TestCaseOut(
         id=str(tc.id),
         key=tc.key,
         project_id=str(tc.project_id),
         folder_id=str(tc.folder_id) if tc.folder_id else None,
         scenario_id=str(tc.scenario_id) if tc.scenario_id else None,
+        plan_keys=plan_keys or [],
         title=tc.title,
         lifecycle_state=tc.lifecycle_state,
         current_version_id=str(tc.current_version_id) if tc.current_version_id else None,
@@ -147,7 +149,8 @@ async def create_test_case(
 @router.get("/projects/{project_id}/test-cases")
 async def list_test_cases(
     project_id: str, actor: CurrentActor, db: DbSession,
-    folder_id: str | None = None, scenario_id: str | None = None, unassigned: bool = False,
+    folder_id: str | None = None, scenario_id: str | None = None,
+    plan_id: str | None = None, unassigned: bool = False,
     state: str | None = None, q: str | None = None,
     sort: str | None = None,
     page: int = Query(1, ge=1), page_size: int = Query(25, ge=1, le=200),
@@ -156,15 +159,36 @@ async def list_test_cases(
         db, actor, project_id=uuid.UUID(project_id),
         folder_id=uuid.UUID(folder_id) if folder_id else None,
         scenario_id=uuid.UUID(scenario_id) if scenario_id else None,
+        plan_id=uuid.UUID(plan_id) if plan_id else None,
         unassigned=unassigned,
         state=state, query=q, sort=sort, page=page, page_size=page_size,
     )
+    plan_map = await _plan_keys_for(db, [tc.id for tc in rows])
     pages = max(1, (total + page_size - 1) // page_size)
     return {
-        "items": [_tc_out(tc).model_dump() for tc in rows],
+        "items": [_tc_out(tc, plan_map.get(tc.id, [])).model_dump() for tc in rows],
         "page": page, "page_size": page_size, "total": total, "pages": pages,
         "links": {"self": f"/api/v1/projects/{project_id}/test-cases?page={page}"},
     }
+
+
+async def _plan_keys_for(db, tc_ids: list) -> dict:
+    if not tc_ids:
+        return {}
+    from app.models import PlanScopeItem, TestPlan
+
+    rows = (
+        await db.execute(
+            select(PlanScopeItem.test_case_id, TestPlan.key)
+            .join(TestPlan, TestPlan.id == PlanScopeItem.plan_id)
+            .where(PlanScopeItem.test_case_id.in_(tc_ids))
+            .order_by(TestPlan.key)
+        )
+    ).all()
+    out: dict = {}
+    for tcid, key in rows:
+        out.setdefault(tcid, []).append(key)
+    return out
 
 
 @router.get("/test-cases/{tc_id}", response_model=TestCaseOut)

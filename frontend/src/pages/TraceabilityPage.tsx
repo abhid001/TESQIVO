@@ -1,4 +1,4 @@
-import { useParams } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { http } from "../api/client";
@@ -31,7 +31,10 @@ export function TraceabilityPage() {
   return (
     <>
       <div className="page-header">
-        <h2>Traceability matrix</h2>
+        <div>
+          <h2>Traceability</h2>
+          <div className="page-sub">Requirement → test → result. Click a requirement to open it.</div>
+        </div>
         <select value={cycleId} onChange={(e) => setCycleId(e.target.value)}>
           <option value="">Design view (no cycle)</option>
           {cycles.data?.map((c) => (
@@ -58,7 +61,9 @@ export function TraceabilityPage() {
               {matrix.data.rows.map((r) => (
                 <tr key={r.requirement_key}>
                   <td className="key">
-                    {r.requirement_key}
+                    <Link to={`/p/${projectKey}/requirements?req=${encodeURIComponent(r.requirement_key)}`}>
+                      {r.requirement_key}
+                    </Link>
                     <div className="muted" style={{ whiteSpace: "normal" }}>
                       {r.requirement_title}
                     </div>

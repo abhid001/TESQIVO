@@ -2,9 +2,93 @@ export interface Me {
   id: string;
   username: string;
   display_name: string;
+  email: string;
   is_system_admin: boolean;
   must_change_password: boolean;
   memberships: { project_id: string; project_key: string; role: string }[];
+}
+
+export interface DiscoverableProject {
+  id: string;
+  key: string;
+  name: string;
+  description: string | null;
+  is_member: boolean;
+  pending_request_role: string | null;
+}
+
+export interface AccessRequest {
+  id: string;
+  project_id: string;
+  project_key: string;
+  project_name: string;
+  user_id: string;
+  username: string;
+  user_email: string;
+  user_display_name: string;
+  requested_role: string;
+  message: string | null;
+  status: string;
+  created_at: string;
+  decided_at: string | null;
+}
+
+export interface Feedback {
+  id: string;
+  category: string;
+  message: string;
+  page_path: string | null;
+  status: string;
+  admin_note: string | null;
+  created_at: string;
+  resolved_at: string | null;
+  user_username: string;
+  user_email: string;
+  user_display_name: string;
+  project_key: string | null;
+  project_id: string | null;
+}
+
+export interface UserMembership {
+  project_id: string;
+  project_key: string;
+  project_name: string;
+  role: string;
+}
+
+export interface ReferenceValue {
+  id: string;
+  kind: string;
+  value: string;
+  is_active: boolean;
+}
+
+export interface ActivityItem {
+  id: string;
+  action: string;
+  text: string;
+  actor: string;
+  kind: "ok" | "bad" | "info";
+  at: string;
+}
+
+export interface Notification {
+  id: string;
+  kind: string;
+  title: string;
+  body: string | null;
+  link: string | null;
+  created_at: string;
+  read: boolean;
+}
+
+export interface TrendPoint {
+  date: string;
+  passed: number;
+  failed: number;
+  blocked: number;
+  other: number;
+  total: number;
 }
 
 export interface InstanceUser {
@@ -56,6 +140,7 @@ export interface TestCase {
   project_id: string;
   folder_id: string | null;
   scenario_id: string | null;
+  plan_keys: string[];
   title: string;
   lifecycle_state: string;
   current_version_id: string | null;
@@ -179,9 +264,17 @@ export interface Requirement {
   id: string;
   key: string;
   title: string;
+  description: string | null;
+  acceptance_criteria: string | null;
   status: string;
   priority: string;
   req_type: string;
+  component: string | null;
+  labels: string | null;
+  owner_id: string | null;
+  owner_name: string | null;
+  source_type: string;
+  external_reference: string | null;
   release_id: string | null;
   version: number;
 }
