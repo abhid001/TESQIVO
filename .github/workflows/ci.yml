@@ -23,11 +23,12 @@ jobs:
         image: redis:7-alpine
         ports: ["6379:6379"]
     env:
+      # Used by the alembic step (config requires these); the pytest steps set
+      # their own values in tests/conftest.py.
       TESQIVO_DB_URL: postgresql+asyncpg://tesqivo:tesqivo@localhost:5432/tesqivo
       TESQIVO_REDIS_URL: redis://localhost:6379/0
       TESQIVO_SECRET_KEY: ci-secret-key-that-is-at-least-32-bytes-long
       TESQIVO_PUBLIC_URL: http://localhost:8000
-      TESQIVO_BOOTSTRAP_TOKEN: ci-token
     defaults:
       run:
         working-directory: backend

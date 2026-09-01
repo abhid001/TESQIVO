@@ -16,8 +16,10 @@ os.environ.setdefault(
 os.environ.setdefault("TESQIVO_REDIS_URL", "redis://localhost:6379/15")
 os.environ.setdefault("TESQIVO_SECRET_KEY", "test-secret-key-that-is-definitely-long-enough-xx")
 os.environ.setdefault("TESQIVO_PUBLIC_URL", "http://testserver")
-os.environ.setdefault("TESQIVO_BOOTSTRAP_TOKEN", "test-bootstrap-token")
-os.environ.setdefault("TESQIVO_ENVIRONMENT", "test")
+# Forced (not setdefault): the fixtures below send this exact token, so an ambient
+# TESQIVO_BOOTSTRAP_TOKEN (e.g. from a CI job env) must not win.
+os.environ["TESQIVO_BOOTSTRAP_TOKEN"] = "test-bootstrap-token"
+os.environ["TESQIVO_ENVIRONMENT"] = "test"
 os.environ.setdefault("TESQIVO_ARGON2_TIME_COST", "1")
 os.environ.setdefault("TESQIVO_ARGON2_MEMORY_COST_KIB", "8192")
 os.environ.setdefault("TESQIVO_ARGON2_PARALLELISM", "1")
