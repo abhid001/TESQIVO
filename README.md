@@ -46,8 +46,11 @@ docker compose exec web python -m app.cli create-admin
 ```
 
 No `.env` is required for a trial. One image (`ghcr.io/abhid001/tesqivo`) serves the
-SPA and the API; `db` (PostgreSQL 16) and `redis` run alongside it. For production
-config, HTTPS, upgrades and backups see [`docs/self-hosting.md`](docs/self-hosting.md).
+SPA and the API; `db` (PostgreSQL 16) and `redis` run alongside it.
+
+**Installing it somewhere real?** [`INSTALL.md`](INSTALL.md) is a complete,
+self-contained guide — prerequisites, config, HTTPS, upgrades, backup/restore,
+troubleshooting. Deeper operational detail is in [`docs/self-hosting.md`](docs/self-hosting.md).
 
 API docs: `http://localhost:8080/api/v1/docs` · OpenAPI: `/api/v1/openapi.json` ·
 build: `/api/v1/version`.
