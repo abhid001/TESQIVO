@@ -67,6 +67,37 @@ async def test_cannot_change_scope_of_completed_cycle(admin, project):
 
 
 @pytest.mark.asyncio
+async def test_clone_cycle_copies_scope_as_fresh_draft(admin, project):
+    tc, cyc, ct_id = await _ready_cycle_test(admin, project)  # Active cycle, 1 test
+    # run the original so it has a result that must NOT carry over
+    a = (await admin.post(f"/api/v1/cycle-tests/{ct_id}/attempts")).json()
+    for i in range(1, len(a["steps"]) + 1):
+        await admin.patch(f"/api/v1/attempts/{a['id']}/steps/{i}", json={"result": "passed"})
+    await admin.post(f"/api/v1/attempts/{a['id']}/complete", json={})
+
+    r = await admin.post(
+        f"/api/v1/cycles/{cyc['id']}/clone",
+        json={"name": "Regression round 2", "environment": "staging", "build": "42"},
+    )
+    assert r.status_code == 201, r.text
+    clone = r.json()
+    assert clone["id"] != cyc["id"]
+    assert clone["status"] == "draft"
+    assert clone["name"] == "Regression round 2"
+    assert clone["environment"] == "staging" and clone["build"] == "42"
+
+    items = (await admin.get(f"/api/v1/cycles/{clone['id']}/tests")).json()["items"]
+    assert {i["test_case_key"] for i in items} == {tc["key"]}
+    assert all(i["displayed_result"] == "NOT_RUN" for i in items)
+    assert all(i["attempt_count"] == 0 for i in items)
+
+    # defaults: name/env/build fall back to the source when omitted
+    r2 = await admin.post(f"/api/v1/cycles/{cyc['id']}/clone", json={})
+    assert r2.status_code == 201
+    assert r2.json()["name"] == f"{cyc['name']} (copy)"
+
+
+@pytest.mark.asyncio
 async def test_cycle_breakdown_groups_execution_by_cycle(admin, project):
     _, cyc, ct_id = await _ready_cycle_test(admin, project)
     a = (await admin.post(f"/api/v1/cycle-tests/{ct_id}/attempts")).json()
