@@ -257,6 +257,62 @@ async def create_cycle(
     return cycle
 
 
+async def clone_cycle(
+    session: AsyncSession,
+    actor: Actor,
+    ctx: Ctx,
+    *,
+    cycle_id: uuid.UUID,
+    name: str | None = None,
+    environment: str | None = None,
+    build: str | None = None,
+) -> TestCycle:
+    """Create a fresh draft cycle in the same plan, copying scope (the test cases)
+    but not results. Handy for re-running the same suite on a new build/env."""
+    src = await _get_cycle(session, cycle_id)
+    authz.authorize(actor, "cycle.manage", project_id=src.project_id)
+    new = TestCycle(
+        plan_id=src.plan_id,
+        project_id=src.project_id,
+        key=await next_key(session, src.project_id, "test_cycle"),
+        name=(name or f"{src.name} (copy)").strip() or f"{src.name} (copy)",
+        description=src.description,
+        release_id=src.release_id,
+        environment=(environment or src.environment).strip() or "default",
+        build=(build or src.build).strip() or "unspecified",
+        browser=src.browser,
+        platform=src.platform,
+        status="draft",
+        created_by=actor.id,
+    )
+    session.add(new)
+    await session.flush()
+    src_cts = list(
+        await session.scalars(
+            select(CycleTest).where(
+                CycleTest.cycle_id == src.id, CycleTest.removed_at.is_(None)
+            )
+        )
+    )
+    for ct in src_cts:
+        session.add(
+            CycleTest(
+                cycle_id=new.id,
+                project_id=new.project_id,
+                test_case_id=ct.test_case_id,
+                assigned_to=ct.assigned_to,
+                added_by=actor.id,
+            )
+        )
+    audit.record(
+        session, actor=actor, ctx=ctx, entity_type="test_cycle", action="cycle.cloned",
+        entity_id=new.id, entity_key=new.key, project_id=new.project_id,
+        after={"name": new.name, "from": src.key, "tests": len(src_cts)},
+    )
+    await session.commit()
+    return new
+
+
 async def add_cycle_tests(
     session: AsyncSession,
     actor: Actor,

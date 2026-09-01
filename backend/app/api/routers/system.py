@@ -8,7 +8,9 @@ from fastapi import APIRouter, Header, Response
 from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy import text
 
+from app import __version__
 from app.api.deps import DbSession, RequestCtx
+from app.core.config import get_settings
 from app.domain import auth
 
 router = APIRouter(tags=["system"])
@@ -17,6 +19,11 @@ router = APIRouter(tags=["system"])
 @router.get("/healthz")
 async def liveness() -> dict[str, str]:
     return {"status": "ok"}
+
+
+@router.get("/version")
+async def version() -> dict[str, str]:
+    return {"version": __version__, "environment": get_settings().environment}
 
 
 @router.get("/readyz")

@@ -11,41 +11,42 @@
 
 ## Configuration
 
-All configuration is via `TESQIVO_*` environment variables. The API refuses to
-start with a single clear log line if a required variable is missing or invalid
-(no stack trace, no secret echo). Full contract:
-`docs/architecture/09_deployment.md`.
-
-Required: `TESQIVO_DB_URL`, `TESQIVO_REDIS_URL`, `TESQIVO_SECRET_KEY` (≥32 bytes),
-`TESQIVO_PUBLIC_URL`. Required on first boot: `TESQIVO_BOOTSTRAP_TOKEN`.
+All configuration is via `TESQIVO_*` environment variables. Nothing is required
+for a local trial — the bundled `docker-compose.yml` supplies working defaults.
+The process refuses to start with a single clear log line if `TESQIVO_DB_URL`,
+`TESQIVO_REDIS_URL` or `TESQIVO_PUBLIC_URL` is invalid (no stack trace, no secret
+echo). `TESQIVO_SECRET_KEY` is auto-generated and persisted at `/data/secret_key`
+when unset. Full contract and env table: `docs/self-hosting.md`.
 
 ## First run
 
 ```bash
-cp .env.example .env
-# TESQIVO_SECRET_KEY=$(openssl rand -base64 48)
-# TESQIVO_BOOTSTRAP_TOKEN=$(openssl rand -hex 24)
-docker compose up -d --build
+curl -O https://raw.githubusercontent.com/abhid001/TESQIVO/main/docker-compose.yml
+docker compose up -d
+docker compose exec web python -m app.cli create-admin
 ```
 
-`migrate` runs `alembic upgrade head` once and exits; `api` and `worker` wait for
-it. Visit `TESQIVO_PUBLIC_URL`, enter the bootstrap token, and create the first
-System Admin. After setup, unset `TESQIVO_BOOTSTRAP_TOKEN` and
-`docker compose up -d` again.
+The `web` container applies `alembic upgrade head` on start (idempotent); the
+worker skips it (`TESQIVO_AUTO_MIGRATE=0`). `create-admin` works only while no
+user exists; the browser "create first administrator" screen (gated by
+`TESQIVO_BOOTSTRAP_TOKEN`) is the alternative.
 
 ## Health
 
 - `GET /api/v1/healthz` — liveness (process up).
 - `GET /api/v1/readyz` — readiness (database reachable); returns 503 when degraded.
-- Compose healthchecks gate `api` on `db` + `migrate`.
+- `GET /api/v1/version` — the running build.
+- Compose healthchecks gate `web` and `worker` on `db` + `redis`.
 
 ## Upgrades
 
 ```bash
-git pull
-docker compose pull        # or rebuild: docker compose build
-docker compose up -d       # migrate re-runs; api waits for it
+docker compose pull
+docker compose up -d       # the web entrypoint re-applies migrations
 ```
+
+Pin `TESQIVO_VERSION` (e.g. `v0.2.0`) in `.env` for reviewed upgrades instead of
+`:latest`. Confirm with `GET /api/v1/version`.
 
 Migration compatibility policy: a release never removes a column still read by the
 previous minor version. Destructive migrations are split across two releases
@@ -56,14 +57,15 @@ previous minor version. Destructive migrations are split across two releases
 ```bash
 make backup
 # -> backups/db-YYYYMMDD-HHMMSS.dump  (pg_dump -Fc)
-# -> backups/attachments-YYYYMMDD-HHMMSS.tgz
+# -> backups/appdata-YYYYMMDD-HHMMSS.tgz  (the /data volume: secret + attachments)
 
-make restore BACKUP=backups/db-XXXX.dump ATTACH=backups/attachments-XXXX.tgz
+make restore BACKUP=backups/db-XXXX.dump ATTACH=backups/appdata-XXXX.tgz
 ```
 
 Restore drops and recreates schema objects (`pg_restore --clean --if-exists`),
-replaces the attachments volume contents, then re-runs migrations. **Test restore
-into a clean environment before relying on it** (acceptance §19.10).
+replaces the `appdata` volume contents, then restarts `web` (its entrypoint
+re-applies migrations). Raw commands without a checkout: `docs/self-hosting.md`.
+**Test restore into a clean environment before relying on it** (acceptance §19.10).
 
 Initial internal targets: RPO 24h, RTO 4h. Schedule `make backup` via cron and
 copy `./backups/` off-host.

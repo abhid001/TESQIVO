@@ -12,7 +12,7 @@ Pick one:
 | Option | Give them | Good for |
 |---|---|---|
 | **A. A running URL** | You host it, they get a link + a login | Non-technical testers; fastest |
-| **B. The repo** | A zip or Git access; they run `docker compose up` | Testers comfortable with a terminal |
+| **B. Self-host** | The `docker-compose.yml` (one file); they run `docker compose up -d` | Testers comfortable with a terminal |
 
 Both paths below produce the same app.
 
@@ -21,9 +21,9 @@ Both paths below produce the same app.
 ## 2. Prerequisites (host that runs the stack)
 
 - **Docker Desktop** (macOS/Windows) or **Docker Engine 24+ + Compose v2** (Linux)
-- ~2 GB free RAM, ~2 GB disk
-- Ports: one free host port for the web UI (default **8080**)
-- `openssl` (for generating secrets) — preinstalled on macOS/Linux
+- ~1–2 GB free RAM, ~2 GB disk
+- One free host port for the web UI (default **8080**)
+- Outbound HTTPS so the host can pull the image from `ghcr.io`
 
 Verify:
 
@@ -34,88 +34,68 @@ docker compose version
 
 ---
 
-## 3. Get the code
+## 3. Get the Compose file
 
-**From Git:**
 ```bash
-git clone <your-repo-url> tesqivo
-cd tesqivo
+mkdir tesqivo && cd tesqivo
+curl -O https://raw.githubusercontent.com/abhid001/TESQIVO/main/docker-compose.yml
 ```
 
-**From a zip:** unzip it, then `cd` into the folder. It must contain
-`docker-compose.yml`, `backend/`, `frontend/`, `deploy/`.
+(Contributors working from a clone run `make up` instead — that builds the image
+from source. Everyone else uses the single file above.)
 
 ---
 
-## 4. Configure (`.env`)
+## 4. Configure (optional)
 
-```bash
-cp .env.example .env
-```
-
-Edit `.env` and set these **four** values:
+**Nothing is required for a test instance.** For one you'll keep, create `.env`
+next to `docker-compose.yml` and set:
 
 ```dotenv
-# 1. Session/CSRF secret — must be >= 32 bytes. Generate one:
-#    openssl rand -base64 48
-TESQIVO_SECRET_KEY=<paste generated value>
-
-# 2. One-time gate for creating the first admin. Generate one:
-#    openssl rand -hex 24
-TESQIVO_BOOTSTRAP_TOKEN=<paste generated value>
-
-# 3. The URL testers will open. Use the host's LAN IP if testing from other
-#    machines, e.g. http://192.168.1.50:8080
-TESQIVO_PUBLIC_URL=http://localhost:8080
-
-# 4. Database password (any strong string)
-POSTGRES_PASSWORD=<strong password>
+POSTGRES_PASSWORD=<strong password>          # change from the default
+TESQIVO_PUBLIC_URL=http://localhost:8080      # the exact URL testers open;
+                                              # use the host LAN IP or an https URL as appropriate
+TESQIVO_HTTP_PORT=8080                         # change if 8080 is taken
 ```
 
-Leave `TESQIVO_HTTP_PORT=8080` unless 8080 is taken.
-
-Email is **optional** and off by default — the "Forgot password?" screen will
-tell testers to contact an administrator, which is fine for a test instance. To
-enable it, fill the `TESQIVO_SMTP_*` block in `.env`.
-
-> Keep `.env` private — it holds secrets. It is git-ignored.
+The session secret is generated automatically on first boot and persisted in the
+data volume. Email is optional and off by default — "Forgot password?" tells
+testers to contact an admin, which is fine for testing. See
+[`self-hosting.md`](self-hosting.md) for the full reference.
 
 ---
 
 ## 5. Start the stack
 
 ```bash
-docker compose up -d --build
+docker compose up -d
 ```
 
-First run builds images (~2–4 min). It starts six services:
-`db`, `redis`, `migrate` (runs once and exits), `api`, `worker`, `proxy`.
-
-Wait for health, then check:
+First run pulls the image (~30–60 s). It starts four services: `db`, `redis`,
+`web`, `worker`.
 
 ```bash
 docker compose ps
 curl -fsS http://localhost:8080/api/v1/healthz     # {"status":"ok"}
 curl -fsS http://localhost:8080/api/v1/readyz      # database: ok
+curl -fsS http://localhost:8080/api/v1/version     # the running build
 ```
 
-`migrate` showing **Exited (0)** is correct — it applies the schema and stops.
-
-Open **http://localhost:8080** (or your `TESQIVO_PUBLIC_URL`).
+`web` applies database migrations automatically as it starts. Open
+**http://localhost:8080** (or your `TESQIVO_PUBLIC_URL`).
 
 ---
 
-## 6. First-admin setup (once)
+## 6. Create the first administrator (once)
 
-The first screen is **"Create the first administrator"**.
+```bash
+docker compose exec web python -m app.cli create-admin
+```
 
-1. Paste the `TESQIVO_BOOTSTRAP_TOKEN` from your `.env`.
-2. Choose an admin **username**, **email**, and **password**
-   (min 12 chars, upper + lower + a digit).
-3. Submit. You land in the **Admin console**.
-
-After this succeeds, the setup screen is permanently disabled. For safety you can
-now blank `TESQIVO_BOOTSTRAP_TOKEN` in `.env` and `docker compose up -d` again.
+Answer the prompts (username, email, display name, password — min 12 chars,
+upper + lower + a digit), or pass `--username --email --password`. Then sign in
+at the URL. This command works only while no user exists; afterwards, manage
+people from the in-app admin console.
 
 ---
 
@@ -223,17 +203,15 @@ docker compose up -d                     # start again
 ### Reset to a clean slate (wipes all data)
 
 ```bash
-docker compose down -v && docker compose up -d --build
+docker compose down -v && docker compose up -d
 ```
 
-Then repeat step 6 (first-admin setup).
+Then repeat step 6 (create the first administrator).
 
 ### Back up / restore test data
 
-```bash
-make backup                                             # -> ./backups/
-make restore BACKUP=backups/db-XXXX.dump ATTACH=backups/attachments-XXXX.tgz
-```
+From a clone: `make backup` / `make restore BACKUP=… ATTACH=backups/appdata-XXXX.tgz`.
+Raw commands (no clone) are in [`self-hosting.md`](self-hosting.md#backup-and-restore).
 
 ### Reset a forgotten admin/user password
 
@@ -244,8 +222,7 @@ admin, if you're locked out entirely, see `docs/OPERATIONS.md`.)
 ### Upgrade to a newer build
 
 ```bash
-git pull            # or drop in a new zip
-docker compose up -d --build     # 'migrate' re-runs automatically
+docker compose pull && docker compose up -d     # migrations re-run automatically
 ```
 
 ---
@@ -279,9 +256,8 @@ Give the tester this short note:
 
 | Symptom | Fix |
 |---|---|
-| `docker compose up` fails: *"required variable TESQIVO_SECRET_KEY is missing"* | `.env` not filled — set all four values in step 4 |
-| API container restarts / `readyz` shows `database: unavailable` | `docker compose logs api db`; usually `db` still starting — wait 20 s |
-| `migrate` exited non-zero | `docker compose logs migrate`; on a schema conflict after an upgrade, reset with `down -v` (test data only) |
+| `web` restarts / `readyz` shows `database: unavailable` | `docker compose logs web db`; usually `db` still starting — it retries |
+| `web` logs a migration error after an upgrade | `docker compose logs web`; on a test instance, reset with `down -v` |
 | Port 8080 in use | set `TESQIVO_HTTP_PORT` to a free port in `.env`, `up -d` again |
 | Login works but every action says *"Missing or invalid CSRF token"* | hard-refresh the browser (Cmd/Ctrl+Shift+R); stale cached bundle |
 | Tester on another machine can't sign in | `TESQIVO_PUBLIC_URL` must match the URL they actually open |

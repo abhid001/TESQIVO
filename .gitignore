@@ -22,6 +22,7 @@ data/
 # IDE
 .idea/
 .vscode/
+.claude/settings.local.json
 
 # test artifacts
 backend/.pytest_tesqivo.db*

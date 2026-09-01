@@ -1,12 +1,20 @@
 name: tesqivo
 
+# Self-hosting TESQIVO:
+#
+#   curl -O https://raw.githubusercontent.com/abhid001/TESQIVO/main/docker-compose.yml
+#   docker compose up -d
+#   docker compose exec web python -m app.cli create-admin
+#
+# No .env is required for a trial. For production set at least POSTGRES_PASSWORD
+# and TESQIVO_PUBLIC_URL - see .env.example and docs/self-hosting.md.
+# Contributors building from source use: docker-compose.dev.yml (override).
+
 x-app-env: &app-env
   TESQIVO_DB_URL: postgresql+asyncpg://tesqivo:${POSTGRES_PASSWORD:-tesqivo}@db:5432/tesqivo
   TESQIVO_REDIS_URL: redis://redis:6379/0
-  TESQIVO_SECRET_KEY: ${TESQIVO_SECRET_KEY:?set TESQIVO_SECRET_KEY in .env (>=32 bytes)}
   TESQIVO_PUBLIC_URL: ${TESQIVO_PUBLIC_URL:-http://localhost:8080}
-  TESQIVO_BOOTSTRAP_TOKEN: ${TESQIVO_BOOTSTRAP_TOKEN:-}
-  TESQIVO_ATTACHMENT_DIR: /data/attachments
+  TESQIVO_SECRET_KEY: ${TESQIVO_SECRET_KEY:-}
   TESQIVO_ENVIRONMENT: production
   TESQIVO_SMTP_HOST: ${TESQIVO_SMTP_HOST:-}
   TESQIVO_SMTP_PORT: ${TESQIVO_SMTP_PORT:-587}
@@ -29,6 +37,7 @@ services:
       interval: 5s
       timeout: 3s
       retries: 10
+    restart: unless-stopped
 
   redis:
     image: redis:7-alpine
@@ -40,35 +49,30 @@ services:
       interval: 5s
       timeout: 3s
       retries: 10
+    restart: unless-stopped
 
-  migrate:
-    build: ./backend
-    command: ["sh", "-c", "python -m app.cli wait-db && alembic upgrade head"]
+  web:
+    image: ghcr.io/abhid001/tesqivo:${TESQIVO_VERSION:-latest}
     environment: *app-env
+    ports:
+      - "${TESQIVO_HTTP_PORT:-8080}:8080"
+    volumes:
+      - appdata:/data
     depends_on:
       db:
         condition: service_healthy
-
-  api:
-    build: ./backend
-    environment: *app-env
-    volumes:
-      - attachments:/data/attachments
-    depends_on:
-      migrate:
-        condition: service_completed_successfully
       redis:
         condition: service_healthy
     restart: unless-stopped
 
   worker:
-    build: ./backend
+    image: ghcr.io/abhid001/tesqivo:${TESQIVO_VERSION:-latest}
     command: ["python", "-m", "app.worker"]
-    environment: *app-env
+    environment:
+      <<: *app-env
+      TESQIVO_AUTO_MIGRATE: "0"
     volumes:
-      - attachments:/data/attachments
-    # The worker has no HTTP server; verify its runtime dependencies instead of
-    # the API image's default curl healthcheck.
+      - appdata:/data
     healthcheck:
       test:
         - CMD
@@ -80,26 +84,13 @@ services:
       retries: 3
       start_period: 10s
     depends_on:
-      migrate:
-        condition: service_completed_successfully
+      web:
+        condition: service_started
       redis:
         condition: service_healthy
-    restart: unless-stopped
-
-  proxy:
-    build:
-      context: .
-      dockerfile: frontend/Dockerfile
-    ports:
-      - "${TESQIVO_HTTP_PORT:-8080}:80"
-    volumes:
-      - caddydata:/data
-    depends_on:
-      - api
     restart: unless-stopped
 
 volumes:
   pgdata:
   redisdata:
-  attachments:
-  caddydata:
+  appdata:

@@ -856,6 +856,23 @@ ul.plain-list li a { flex: 1; }
 .feedback-fab:hover { background: var(--primary-hover); }
 
 .runner-grid { display: grid; gap: 16px; grid-template-columns: minmax(260px, 340px) 1fr; align-items: start; }
+.runner-list { display: flex; flex-direction: column; gap: 6px; max-height: 62vh; overflow-y: auto; }
+.runner-item { all: unset; box-sizing: border-box; cursor: pointer; display: block; width: 100%; padding: 9px 11px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); }
+.runner-item:hover { border-color: var(--primary); }
+.runner-item.active { border-color: var(--primary); background: var(--primary-weak); box-shadow: inset 3px 0 0 var(--primary); }
+.runner-item .r-key { font-family: var(--mono); font-size: 11.5px; color: var(--text-dim); }
+.runner-item .r-title { font-size: 13px; margin: 2px 0 6px; line-height: 1.35; }
+.runner-step { padding: 12px 0; border-top: 1px solid var(--border); }
+.runner-step:first-child { border-top: none; padding-top: 4px; }
+.result-group { display: flex; gap: 6px; flex-wrap: wrap; }
+.result-btn { padding: 5px 12px; font-size: 12px; font-weight: 500; border-radius: var(--radius-sm); border: 1px solid var(--border); background: var(--surface); cursor: pointer; color: var(--text); }
+.result-btn:hover { border-color: var(--border-strong); }
+.result-btn.on-passed { background: var(--success-bg); color: var(--success); border-color: transparent; font-weight: 700; }
+.result-btn.on-failed { background: var(--danger-bg); color: var(--danger); border-color: transparent; font-weight: 700; }
+.result-btn.on-blocked { background: var(--warning-bg); color: var(--warning); border-color: transparent; font-weight: 700; }
+.result-btn.on-skipped { background: var(--surface-3); color: var(--text); border-color: transparent; font-weight: 700; }
+.result-btn.on-not_run { background: var(--surface-3); color: var(--text-dim); border-color: transparent; }
+.runner-step-comment { margin-top: 8px; width: 100%; min-height: 34px; font-family: inherit; font-size: 12.5px; padding: 6px 8px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface); color: var(--text); resize: vertical; }
 
 /* ============================ responsive ============================ */
 @media (max-width: 1180px) {

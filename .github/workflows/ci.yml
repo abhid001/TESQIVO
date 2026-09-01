@@ -23,11 +23,12 @@ jobs:
         image: redis:7-alpine
         ports: ["6379:6379"]
     env:
+      # Used by the alembic step (config requires these); the pytest steps set
+      # their own values in tests/conftest.py.
       TESQIVO_DB_URL: postgresql+asyncpg://tesqivo:tesqivo@localhost:5432/tesqivo
       TESQIVO_REDIS_URL: redis://localhost:6379/0
       TESQIVO_SECRET_KEY: ci-secret-key-that-is-at-least-32-bytes-long
       TESQIVO_PUBLIC_URL: http://localhost:8000
-      TESQIVO_BOOTSTRAP_TOKEN: ci-token
     defaults:
       run:
         working-directory: backend
@@ -67,22 +68,40 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Build images and boot the stack
-        run: |
-          cp .env.example .env
-          sed -i 's/^TESQIVO_SECRET_KEY=.*/TESQIVO_SECRET_KEY=ci-secret-key-that-is-at-least-32-bytes-long/' .env
-          sed -i 's/^TESQIVO_BOOTSTRAP_TOKEN=.*/TESQIVO_BOOTSTRAP_TOKEN=ci-token/' .env
-          sed -i 's/^POSTGRES_PASSWORD=.*/POSTGRES_PASSWORD=ci/' .env
-          docker compose up -d --build
-      - name: Wait for health and hit the API
+      - name: Boot the stack from source (no .env)
+        run: docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build
+      - name: Wait for health and exercise the app
         run: |
           for i in $(seq 1 60); do
             if curl -fsS http://localhost:8080/api/v1/healthz; then ok=1; break; fi
             sleep 3
           done
           test -n "$ok"
+          curl -fsS http://localhost:8080/api/v1/version | grep -q '"version"'
           curl -fsS http://localhost:8080/api/v1/setup/status | grep -q needs_setup
           curl -fsS http://localhost:8080/api/v1/openapi.json | grep -q '"openapi"'
+          # the SPA is served at / and deep links fall back to index.html
+          curl -fsS http://localhost:8080/ | grep -qi '<div id="root">'
+          curl -fsS http://localhost:8080/p/DEMO/dashboard | grep -qi '<div id="root">'
+      - name: create-admin CLI works without a bootstrap token
+        run: |
+          docker compose exec -T web python -m app.cli create-admin \
+            --username ci --email ci@example.com --password 'Ci-Password-123' --display-name CI
+          curl -fsS http://localhost:8080/api/v1/setup/status | grep -q '"needs_setup":false'
       - name: Dump logs on failure
         if: failure()
         run: docker compose logs
+
+  image-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Build the image (amd64, no push)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          platforms: linux/amd64
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

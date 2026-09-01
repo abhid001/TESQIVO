@@ -53,26 +53,24 @@ async def needs_setup(session: AsyncSession) -> bool:
     return (count or 0) == 0
 
 
-async def complete_setup(
+async def create_first_admin(
     session: AsyncSession,
     ctx: Ctx,
     *,
-    bootstrap_token: str | None,
     username: str,
     email: str,
     display_name: str,
     password: str,
 ) -> User:
+    """Create the initial System Admin. Only possible while no user exists; the
+    caller is the gate (bootstrap token for the HTTP path, shell access for the CLI)."""
     if not await needs_setup(session):
         raise SetupAlreadyCompleted("Initial setup has already been completed.")
-    expected = get_settings().bootstrap_token
-    if not expected or not bootstrap_token or not secrets.compare_digest(bootstrap_token, expected):
-        raise Forbidden("Invalid or missing bootstrap token.")
     _validate_password(password)
     user = User(
         username=username.strip(),
         email=email.strip().lower(),
-        display_name=display_name.strip() or username,
+        display_name=display_name.strip() or username.strip(),
         password_hash=hash_password(password),
         is_system_admin=True,
         status="active",
@@ -90,6 +88,26 @@ async def complete_setup(
     )
     await session.commit()
     return user
+
+
+async def complete_setup(
+    session: AsyncSession,
+    ctx: Ctx,
+    *,
+    bootstrap_token: str | None,
+    username: str,
+    email: str,
+    display_name: str,
+    password: str,
+) -> User:
+    if not await needs_setup(session):
+        raise SetupAlreadyCompleted("Initial setup has already been completed.")
+    expected = get_settings().bootstrap_token
+    if not expected or not bootstrap_token or not secrets.compare_digest(bootstrap_token, expected):
+        raise Forbidden("Invalid or missing bootstrap token.")
+    return await create_first_admin(
+        session, ctx, username=username, email=email, display_name=display_name, password=password
+    )
 
 
 async def authenticate(

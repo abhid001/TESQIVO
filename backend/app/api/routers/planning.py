@@ -157,6 +157,21 @@ async def create_cycle(plan_id: str, body: CreateCycle, actor: CurrentActor, db:
     return _cycle_out(c)
 
 
+class CloneCycle(BaseModel):
+    name: str | None = None
+    environment: str | None = None
+    build: str | None = None
+
+
+@router.post("/cycles/{cycle_id}/clone", response_model=CycleOut, status_code=201)
+async def clone_cycle(cycle_id: str, body: CloneCycle, actor: CurrentActor, db: DbSession, ctx: RequestCtx) -> CycleOut:
+    c = await planning.clone_cycle(
+        db, actor, ctx, cycle_id=uuid.UUID(cycle_id),
+        name=body.name, environment=body.environment, build=body.build,
+    )
+    return _cycle_out(c)
+
+
 @router.get("/projects/{project_id}/cycles", response_model=list[CycleOut])
 async def list_cycles(
     project_id: str, actor: CurrentActor, db: DbSession, release_id: str | None = None

@@ -1,9 +1,9 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { http } from "../api/client";
 import { useProject } from "../api/hooks";
-import type { Cycle, CycleTestRow, Paginated, Plan, TestCase } from "../api/types";
+import type { Cycle, CycleTestRow, Paginated, Plan, ReferenceValue, Release, TestCase } from "../api/types";
 import { Badge, Dialog, EmptyState, Field, errText, useToast } from "../ui";
 
 export function CyclesPage() {
@@ -14,7 +14,8 @@ export function CyclesPage() {
   const toast = useToast();
   const [creating, setCreating] = useState(false);
   const [scopeFor, setScopeFor] = useState<Cycle | null>(null);
-  const [form, setForm] = useState({ plan_id: "", name: "", environment: "staging", build: "1" });
+  const [cloneFor, setCloneFor] = useState<Cycle | null>(null);
+  const [form, setForm] = useState({ plan_id: "", name: "", environment: "", release_id: "", build: "1" });
 
   const plans = useQuery({
     queryKey: ["plans", pid],
@@ -26,33 +27,45 @@ export function CyclesPage() {
     queryFn: () => http.get<Cycle[]>(`/projects/${pid}/cycles`),
     enabled: !!pid,
   });
+  const refs = useQuery({
+    queryKey: ["refs", pid],
+    queryFn: () => http.get<ReferenceValue[]>(`/projects/${pid}/reference-values`),
+    enabled: !!pid,
+  });
+  const releases = useQuery({
+    queryKey: ["releases", pid],
+    queryFn: () => http.get<Paginated<Release>>(`/projects/${pid}/releases?page_size=200`),
+    enabled: !!pid,
+  });
+  const environments = (refs.data ?? []).filter((r) => r.kind === "environment" && r.is_active);
+  const releaseName = (id: string | null) =>
+    id ? releases.data?.items.find((r) => r.id === id)?.key ?? "" : "";
+
+  const refresh = () => qc.invalidateQueries({ queryKey: ["cycles"] });
 
   const create = useMutation({
     mutationFn: () =>
       http.post(`/plans/${form.plan_id}/cycles`, {
         name: form.name,
-        environment: form.environment,
+        environment: form.environment || "default",
         build: form.build,
+        release_id: form.release_id || null,
       }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["cycles"] });
-      setCreating(false);
-      toast("Cycle created");
-    },
+    onSuccess: () => { refresh(); setCreating(false); toast("Cycle created"); },
+    onError: (e) => toast(errText(e), "error"),
+  });
+
+  const clone = useMutation({
+    mutationFn: (v: { id: string; name: string; environment: string; build: string }) =>
+      http.post(`/cycles/${v.id}/clone`, { name: v.name, environment: v.environment, build: v.build }),
+    onSuccess: () => { refresh(); setCloneFor(null); toast("Cycle cloned to a new draft"); },
     onError: (e) => toast(errText(e), "error"),
   });
 
   const transition = useMutation({
     mutationFn: ({ cycle, to }: { cycle: Cycle; to: string }) =>
-      http.post(`/cycles/${cycle.id}/transitions`, {
-        to,
-        expected_version: cycle.version,
-        reason: "via UI",
-      }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["cycles"] });
-      toast("Cycle updated");
-    },
+      http.post(`/cycles/${cycle.id}/transitions`, { to, expected_version: cycle.version, reason: "via UI" }),
+    onSuccess: () => { refresh(); toast("Cycle updated"); },
     onError: (e) => toast(errText(e), "error"),
   });
 
@@ -77,9 +90,10 @@ export function CyclesPage() {
               <tr>
                 <th>Key</th>
                 <th>Name</th>
-                <th>Env / Build</th>
-                <th>Status</th>
-                <th>Actions</th>
+                <th className="nowrap">Env / Build</th>
+                <th className="nowrap">Release</th>
+                <th className="nowrap">Status</th>
+                <th className="nowrap">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -87,39 +101,31 @@ export function CyclesPage() {
                 <tr key={c.id}>
                   <td className="key">{c.key}</td>
                   <td>{c.name}</td>
-                  <td>
-                    {c.environment} / {c.build}
-                  </td>
-                  <td>
-                    <Badge value={c.status} />
-                  </td>
-                  <td className="inline-actions">
-                    {["draft", "active", "reopened"].includes(c.status) && (
-                      <button onClick={() => setScopeFor(c)}>Manage tests</button>
-                    )}
-                    {c.status === "draft" && (
-                      <button onClick={() => transition.mutate({ cycle: c, to: "active" })}>
-                        Activate
-                      </button>
-                    )}
-                    {(c.status === "active" || c.status === "reopened") && (
-                      <>
-                        <Link className="btn" to={`/p/${projectKey}/cycles/${c.id}/run`}>
-                          Run
-                        </Link>
-                        <button onClick={() => transition.mutate({ cycle: c, to: "completed" })}>
-                          Complete
-                        </button>
-                      </>
-                    )}
-                    {c.status === "completed" && (
-                      <>
-                        <button onClick={() => setScopeFor(c)}>View tests</button>
-                        <button onClick={() => transition.mutate({ cycle: c, to: "reopened" })}>
-                          Reopen
-                        </button>
-                      </>
-                    )}
+                  <td className="nowrap">{c.environment} / {c.build}</td>
+                  <td className="nowrap">{releaseName(c.release_id) || <span className="muted">—</span>}</td>
+                  <td className="nowrap"><Badge value={c.status} /></td>
+                  <td className="nowrap">
+                    <div className="inline-actions">
+                      {["draft", "active", "reopened"].includes(c.status) && (
+                        <button className="sm" onClick={() => setScopeFor(c)}>Manage tests</button>
+                      )}
+                      {c.status === "draft" && (
+                        <button className="sm" onClick={() => transition.mutate({ cycle: c, to: "active" })}>Activate</button>
+                      )}
+                      {(c.status === "active" || c.status === "reopened") && (
+                        <>
+                          <Link className="btn sm primary" to={`/p/${projectKey}/cycles/${c.id}/run`}>Run</Link>
+                          <button className="sm" onClick={() => transition.mutate({ cycle: c, to: "completed" })}>Complete</button>
+                        </>
+                      )}
+                      {c.status === "completed" && (
+                        <>
+                          <button className="sm" onClick={() => setScopeFor(c)}>View tests</button>
+                          <button className="sm" onClick={() => transition.mutate({ cycle: c, to: "reopened" })}>Reopen</button>
+                        </>
+                      )}
+                      <button className="sm" title="Create a draft copy of this cycle" onClick={() => setCloneFor(c)}>Clone</button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -133,35 +139,45 @@ export function CyclesPage() {
       {creating && (
         <Dialog title="New cycle" onClose={() => setCreating(false)}>
           <Field label="Plan">
-            <select
-              value={form.plan_id}
-              onChange={(e) => setForm({ ...form, plan_id: e.target.value })}
-            >
+            <select value={form.plan_id} onChange={(e) => setForm({ ...form, plan_id: e.target.value })}>
               <option value="">Select…</option>
-              {plans.data?.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.key} — {p.name}
-                </option>
-              ))}
+              {plans.data?.map((p) => <option key={p.id} value={p.id}>{p.key} — {p.name}</option>)}
             </select>
           </Field>
           <Field label="Name">
-            <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+            <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} autoFocus />
           </Field>
           <div className="field-row">
             <Field label="Environment">
-              <input
-                value={form.environment}
-                onChange={(e) => setForm({ ...form, environment: e.target.value })}
-              />
+              <select value={form.environment} onChange={(e) => setForm({ ...form, environment: e.target.value })}>
+                <option value="">— select —</option>
+                {environments.map((env) => (
+                  <option key={env.id} value={env.value}>
+                    {env.value[0].toUpperCase() + env.value.slice(1)}
+                  </option>
+                ))}
+              </select>
             </Field>
             <Field label="Build">
               <input value={form.build} onChange={(e) => setForm({ ...form, build: e.target.value })} />
             </Field>
           </div>
+          <Field label="Release (optional)">
+            <select value={form.release_id} onChange={(e) => setForm({ ...form, release_id: e.target.value })}>
+              <option value="">— none —</option>
+              {releases.data?.items.map((r) => (
+                <option key={r.id} value={r.id}>{r.key} — {r.name}</option>
+              ))}
+            </select>
+          </Field>
+          {environments.length === 0 && (
+            <p className="muted small">
+              No environments configured — an administrator can add them in Admin console → Projects → Environments.
+            </p>
+          )}
           <button
             className="primary"
-            disabled={!form.plan_id || !form.name}
+            disabled={!form.plan_id || !form.name || !form.environment || create.isPending}
             onClick={() => create.mutate()}
           >
             Create
@@ -169,10 +185,57 @@ export function CyclesPage() {
         </Dialog>
       )}
 
+      {cloneFor && (
+        <CloneCycleDialog
+          cycle={cloneFor}
+          environments={environments}
+          busy={clone.isPending}
+          onClose={() => setCloneFor(null)}
+          onClone={(name, environment, build) => clone.mutate({ id: cloneFor.id, name, environment, build })}
+        />
+      )}
+
       {scopeFor && pid && (
         <CycleTestsDialog cycle={scopeFor} projectId={pid} onClose={() => setScopeFor(null)} />
       )}
     </>
+  );
+}
+
+function CloneCycleDialog({
+  cycle, environments, busy, onClose, onClone,
+}: {
+  cycle: Cycle;
+  environments: ReferenceValue[];
+  busy: boolean;
+  onClose: () => void;
+  onClone: (name: string, environment: string, build: string) => void;
+}) {
+  const [name, setName] = useState(`${cycle.name} (copy)`);
+  const [environment, setEnvironment] = useState(cycle.environment);
+  const [build, setBuild] = useState(cycle.build);
+  const opts = useMemo(() => {
+    const vals = environments.map((e) => e.value);
+    return vals.includes(cycle.environment) ? vals : [cycle.environment, ...vals];
+  }, [environments, cycle.environment]);
+  return (
+    <Dialog title={`Clone ${cycle.key}`} onClose={onClose}>
+      <p className="muted" style={{ marginTop: 0 }}>
+        Creates a new <strong>draft</strong> cycle in the same plan with the same test cases — results start fresh.
+      </p>
+      <Field label="Name"><input value={name} onChange={(e) => setName(e.target.value)} autoFocus /></Field>
+      <div className="field-row">
+        <Field label="Environment">
+          <select value={environment} onChange={(e) => setEnvironment(e.target.value)}>
+            {opts.map((v) => <option key={v} value={v}>{v[0].toUpperCase() + v.slice(1)}</option>)}
+          </select>
+        </Field>
+        <Field label="Build"><input value={build} onChange={(e) => setBuild(e.target.value)} /></Field>
+      </div>
+      <button className="primary" disabled={!name.trim() || busy} onClick={() => onClone(name, environment, build)}>
+        Clone cycle
+      </button>
+    </Dialog>
   );
 }
 
@@ -210,31 +273,27 @@ function CycleTestsDialog({
 
   const add = useMutation({
     mutationFn: () => http.post(`/cycles/${cycle.id}/tests`, { test_case_ids: [...selected] }),
-    onSuccess: () => {
-      refresh();
-      setSelected(new Set());
-      setAdding(false);
-      toast("Tests added");
-    },
+    onSuccess: () => { refresh(); setSelected(new Set()); setAdding(false); toast("Tests added"); },
     onError: (e) => toast(errText(e), "error"),
   });
   const remove = useMutation({
     mutationFn: (ctId: string) => http.del(`/cycle-tests/${ctId}`),
-    onSuccess: () => {
-      refresh();
-      toast("Test removed");
-    },
+    onSuccess: () => { refresh(); toast("Test removed"); },
     onError: (e) => toast(errText(e), "error"),
   });
 
   const inCycle = new Set(current.data?.items.map((i) => i.test_case_id));
+  const eligible = (cases.data?.items ?? []).filter(
+    (tc) => ["approved", "active"].includes(tc.lifecycle_state) && !inCycle.has(tc.id),
+  );
+  const allSelected = eligible.length > 0 && eligible.every((tc) => selected.has(tc.id));
+  const toggleAll = () =>
+    setSelected(allSelected ? new Set() : new Set(eligible.map((tc) => tc.id)));
 
   return (
     <Dialog title={`Tests in ${cycle.key} — ${cycle.name}`} onClose={onClose}>
       {!editable && (
-        <p className="notice info">
-          This cycle is {cycle.status}. Reopen it to add or remove tests.
-        </p>
+        <p className="notice info">This cycle is {cycle.status}. Reopen it to add or remove tests.</p>
       )}
       <div className="table-wrap">
         <table>
@@ -280,22 +339,38 @@ function CycleTestsDialog({
       </div>
 
       {editable && !adding && (
-        <button className="primary" style={{ marginTop: 14 }} onClick={() => setAdding(true)}>
-          + Add tests
-        </button>
+        <button className="primary" style={{ marginTop: 14 }} onClick={() => setAdding(true)}>+ Add tests</button>
       )}
 
       {editable && adding && (
         <div style={{ marginTop: 14 }}>
-          <p className="muted">
+          <p className="muted small">
             Approved / active test cases only. Adding to a running cycle snapshots the approved version immediately.
           </p>
-          <div className="table-wrap" style={{ maxHeight: 300, overflowY: "auto" }}>
-            <table>
-              <tbody>
-                {cases.data?.items
-                  .filter((tc) => ["approved", "active"].includes(tc.lifecycle_state) && !inCycle.has(tc.id))
-                  .map((tc) => (
+          {cases.isLoading ? (
+            <p>Loading test cases…</p>
+          ) : eligible.length === 0 ? (
+            <p className="muted">No eligible test cases to add.</p>
+          ) : (
+            <div className="table-wrap" style={{ maxHeight: 320, overflowY: "auto" }}>
+              <table>
+                <thead>
+                  <tr>
+                    <th style={{ width: 34 }}>
+                      <input
+                        type="checkbox"
+                        style={{ width: "auto" }}
+                        checked={allSelected}
+                        onChange={toggleAll}
+                        aria-label="Select all"
+                      />
+                    </th>
+                    <th className="nowrap">Key</th>
+                    <th>Title</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {eligible.map((tc) => (
                     <tr key={tc.id}>
                       <td>
                         <input
@@ -313,12 +388,13 @@ function CycleTestsDialog({
                       <td>{tc.title}</td>
                     </tr>
                   ))}
-              </tbody>
-            </table>
-          </div>
+                </tbody>
+              </table>
+            </div>
+          )}
           <div className="inline-actions" style={{ marginTop: 12 }}>
             <button className="primary" disabled={selected.size === 0 || add.isPending} onClick={() => add.mutate()}>
-              Add {selected.size || ""}
+              Add {selected.size || ""} {selected.size === 1 ? "test" : "tests"}
             </button>
             <button onClick={() => { setAdding(false); setSelected(new Set()); }}>Cancel</button>
           </div>
