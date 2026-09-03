@@ -5,6 +5,11 @@
 **Date:** 27 August 2026  
 **Supersedes:** `TESQIVO_Product_Requirements_v3.md`
 
+> **Note (2026-09-03):** references to an "open-source" licence in this document are
+> historical. Per decision **D-012** (`architecture/16_decisions.md`) the licence is now
+> **Proprietary** — see `LICENSE`. §16 "Open-Source Governance" is retained only as a
+> record of the earlier plan.
+
 ## 1. Purpose and Authority
 
 This document is the product and domain authority for TESQIVO architecture, API design, database design, GUI design, testing, and staged implementation. Where an implementation decision is not covered here, the decision must be recorded before it becomes a cross-module contract.

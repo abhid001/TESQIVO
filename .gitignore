@@ -34,3 +34,6 @@ frontend/shots.mjs
 
 # local cloudflare quick tunnel
 .tunnel/
+
+# Python build metadata
+*.egg-info/

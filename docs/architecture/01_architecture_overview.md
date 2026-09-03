@@ -2,7 +2,7 @@
 
 **Version:** 1.0
 **Status:** Draft for review (Architecture Freeze Checklist §22)
-**Authority:** `project_docs/TESQIVO_Product_Requirements_v4.md`
+**Authority:** `docs/TESQIVO_Product_Requirements_v4.md`
 
 This document set is the design artifact package required by PRS §20. Each diagram
 answers one question, uses PRS domain names, and marks deferred (Phase 2/3/4)

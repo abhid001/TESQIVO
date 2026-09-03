@@ -34,7 +34,7 @@ def create_app() -> FastAPI:
     app = FastAPI(
         title="TESQIVO API",
         version=__version__,
-        description="Open-source API-first test management platform - Phase 1",
+        description="API-first test management platform - Phase 1",
         openapi_url=f"{API_PREFIX}/openapi.json",
         docs_url=f"{API_PREFIX}/docs",
         redoc_url=f"{API_PREFIX}/redoc",
