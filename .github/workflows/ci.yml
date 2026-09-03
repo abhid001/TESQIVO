@@ -87,7 +87,7 @@ jobs:
       - name: create-admin CLI works without a bootstrap token
         run: |
           docker compose exec -T web python -m app.cli create-admin \
-            --username ci --email ci@example.com --password 'Ci-Password-123' --display-name CI
+            --username ciadmin --email ci@example.com --password 'Ci-Password-123' --display-name CI
           curl -fsS http://localhost:8080/api/v1/setup/status | grep -q '"needs_setup":false'
       - name: Dump logs on failure
         if: failure()
@@ -100,7 +100,9 @@ jobs:
       - name: Build the Community image (amd64, no push)
         run: docker build --build-arg TESQIVO_VERSION=ci -t tesqivo:ci .
       - name: Community image contains no Enterprise code
-        run: docker run --rm tesqivo:ci sh -c '! test -e app/ee'
+        # --entrypoint sh bypasses docker-entrypoint.sh, which would otherwise run
+        # `app.cli wait-db` and abort (no DB / config) before the check runs.
+        run: docker run --rm --entrypoint sh tesqivo:ci -c '! test -e app/ee'
       - name: Build the Enterprise image on top (amd64, no push)
         run: |
           docker build -f Dockerfile.enterprise \
