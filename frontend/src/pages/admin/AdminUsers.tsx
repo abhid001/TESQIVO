@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { http } from "../../api/client";
 import type { InstanceUser, Project, UserMembership } from "../../api/types";
-import { Badge, Dialog, Field, errText, useToast } from "../../ui";
+import { Badge, Dialog, Field, PASSWORD_HINT, errText, useToast } from "../../ui";
 import { Pager, SortHeader, sortBy, type SortState } from "../../components/table";
 import { Icons } from "../../components/icons";
 
@@ -150,7 +150,7 @@ function EditUserDialog({ user, onClose, onDone }: { user: InstanceUser; onClose
     <Dialog title={`Edit ${user.username}`} onClose={onClose}>
       <Field label="Display name"><input value={f.display_name} onChange={(e) => setF({ ...f, display_name: e.target.value })} /></Field>
       <Field label="Email"><input type="email" value={f.email} onChange={(e) => setF({ ...f, email: e.target.value })} /></Field>
-      <Field label="Set a new password (optional, min 12 chars, mixed case + digit)">
+      <Field label="Set a new password (optional)" hint={PASSWORD_HINT}>
         <input type="text" value={f.password} onChange={(e) => setF({ ...f, password: e.target.value })} placeholder="leave blank to keep current" />
       </Field>
       <button className="primary" disabled={!dirty || save.isPending} onClick={() => save.mutate()}>Save changes</button>
@@ -255,7 +255,7 @@ function NewUserDialog({ onClose, onDone }: { onClose: () => void; onDone: () =>
       <Field label="Username"><input value={f.username} onChange={set("username")} autoFocus /></Field>
       <Field label="Email"><input type="email" value={f.email} onChange={set("email")} /></Field>
       <Field label="Display name"><input value={f.display_name} onChange={set("display_name")} /></Field>
-      <Field label="Temporary password (min 12, mixed case + digit)">
+      <Field label="Temporary password" hint={PASSWORD_HINT}>
         <input type="text" value={f.password} onChange={set("password")} />
       </Field>
       <label className="checkbox" style={{ marginBottom: 14 }}>

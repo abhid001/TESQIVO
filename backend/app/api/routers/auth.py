@@ -77,7 +77,7 @@ async def me(actor: CurrentActor) -> MeOut:
 
 class PasswordResetComplete(BaseModel):
     token: str
-    new_password: str = Field(min_length=12, max_length=256)
+    new_password: str = Field(min_length=1, max_length=256)
 
 
 @router.post("/password-reset/complete", status_code=204)
@@ -109,7 +109,7 @@ async def request_password_reset(
 
 class ChangePasswordRequest(BaseModel):
     current_password: str = Field(min_length=1, max_length=256)
-    new_password: str = Field(min_length=12, max_length=256)
+    new_password: str = Field(min_length=1, max_length=256)
 
 
 @router.post("/password", status_code=204)

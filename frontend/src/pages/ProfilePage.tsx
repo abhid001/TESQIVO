@@ -5,7 +5,7 @@ import { http } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
 import type { Project } from "../api/types";
 import { PlainShell } from "../components/PlainShell";
-import { Card, Field, errText } from "../ui";
+import { Card, Field, PASSWORD_HINT, errText } from "../ui";
 
 const ROLE_LABEL: Record<string, string> = {
   project_admin: "Project admin",
@@ -109,7 +109,7 @@ function ChangePasswordCard({ onChanged }: { onChanged: () => Promise<void> }) {
         <Field label="Current password">
           <input type="password" value={current} onChange={(e) => setCurrent(e.target.value)} />
         </Field>
-        <Field label="New password (min 12 chars, mixed case + digit)">
+        <Field label="New password" hint={PASSWORD_HINT}>
           <input type="password" value={next} onChange={(e) => setNext(e.target.value)} />
         </Field>
         <Field label="Confirm new password">

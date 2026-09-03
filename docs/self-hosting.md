@@ -28,7 +28,8 @@ docker compose exec web python -m app.cli create-admin \
   --username admin --email admin@example.com --password 'Ch4nge-this-passphrase'
 ```
 
-Passwords need at least 12 characters, mixed case, and a digit. It only works while
+Passwords need at least 12 characters, an upper-case letter, a lower-case letter, a
+digit, and a special character. It only works while
 no user exists — afterwards, add people from the in-app admin console.
 
 ## Configuration

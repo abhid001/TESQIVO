@@ -620,7 +620,8 @@ input:focus, select:focus, textarea:focus {
 label { display: block; font-weight: 600; }
 .field { margin-bottom: 14px; }
 .field-label { display: block; margin-bottom: 5px; font-size: 12.5px; color: var(--text-dim); font-weight: 600; }
-.field .error { color: var(--danger); font-size: 12.5px; margin-top: 5px; font-weight: 600; }
+.field .error { color: var(--danger); font-size: 12.5px; margin-top: 5px; font-weight: 600; white-space: pre-line; }
+.field .hint { color: var(--text-dim); font-size: 12px; margin-top: 5px; line-height: 1.45; }
 .row { display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-end; }
 .field-row { display: flex; gap: 12px; flex-wrap: wrap; }
 .field-row > .field { flex: 1 1 160px; min-width: 0; margin-bottom: 14px; }
@@ -717,6 +718,7 @@ th .sort-th { padding: 11px 14px; }
   background: var(--surface); border: 1px solid var(--border);
   border-left: 4px solid var(--primary); padding: 12px 15px;
   border-radius: var(--radius); box-shadow: var(--shadow-lg); font-size: 13.5px;
+  white-space: pre-line;
 }
 .toast.error { border-left-color: var(--danger); }
 

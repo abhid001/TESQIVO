@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { api } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
-import { Card, Field, errText } from "../ui";
+import { Card, Field, PASSWORD_HINT, errText } from "../ui";
 import { Logo } from "../components/Logo";
 
 export function SetupPage({ onDone }: { onDone: () => void }) {
@@ -67,10 +67,7 @@ export function SetupPage({ onDone }: { onDone: () => void }) {
           <Field label="Display name">
             <input value={f.display_name} onChange={set("display_name")} />
           </Field>
-          <Field
-            label="Password (min 12 chars, mixed case + digit)"
-            error={error ?? undefined}
-          >
+          <Field label="Password" hint={PASSWORD_HINT} error={error ?? undefined}>
             <input type="password" value={f.password} onChange={set("password")} />
           </Field>
           <button className="primary" disabled={busy}>

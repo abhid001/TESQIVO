@@ -10,6 +10,12 @@ import {
 } from "react";
 import { ApiError } from "../api/client";
 
+/** Shown next to every password field. Mirrors the backend policy in
+ *  app/core/security.py (password_policy_errors / PASSWORD_POLICY). */
+export const PASSWORD_HINT =
+  "At least 12 characters, including an upper-case letter, a lower-case letter, a digit, " +
+  "and a special character (e.g. ! ? @ # $ % & *). Extra characters beyond these are fine.";
+
 export function Card({
   children,
   className = "",
@@ -38,10 +44,12 @@ export function EmptyState({ children }: { children: ReactNode }) {
 
 export function Field({
   label,
+  hint,
   error,
   children,
 }: {
   label: string;
+  hint?: string;
   error?: string;
   children: ReactNode;
 }) {
@@ -51,6 +59,7 @@ export function Field({
         <span className="field-label">{label}</span>
         {children}
       </label>
+      {hint && !error && <div className="hint">{hint}</div>}
       {error && <div className="error">{error}</div>}
     </div>
   );
@@ -120,8 +129,13 @@ export function ToastProvider({ children }: { children: ReactNode }) {
 
 export function errText(e: unknown): string {
   if (e instanceof ApiError) {
-    const d = e.body.details?.[0];
-    return d ? `${e.body.message} (${d.field}: ${d.message})` : e.body.message;
+    const ds = (e.body.details ?? []).filter((d) => d.message);
+    if (ds.length === 1) return `${e.body.message} (${ds[0].field}: ${ds[0].message})`;
+    if (ds.length > 1) {
+      // e.g. all the password rules that failed — show each on its own line.
+      return `${e.body.message}\n` + ds.slice(0, 6).map((d) => `• ${d.message}`).join("\n");
+    }
+    return e.body.message;
   }
   return e instanceof Error ? e.message : "Unexpected error";
 }

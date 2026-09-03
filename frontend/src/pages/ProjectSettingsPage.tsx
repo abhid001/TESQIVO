@@ -5,7 +5,7 @@ import { http } from "../api/client";
 import { useProject } from "../api/hooks";
 import { useRole, canManageProject } from "../auth/AuthContext";
 import type { AccessRequest, InstanceUser, Member } from "../api/types";
-import { Card, Dialog, EmptyState, Field, errText, useToast } from "../ui";
+import { Card, Dialog, EmptyState, Field, PASSWORD_HINT, errText, useToast } from "../ui";
 import { SortHeader, sortBy, type SortState } from "../components/table";
 
 const ROLES = [
@@ -216,7 +216,7 @@ function AddMemberDialog({ projectId, onClose, onDone }: { projectId: string; on
           <Field label="Username"><input value={nu.username} onChange={(e) => setNu({ ...nu, username: e.target.value })} /></Field>
           <Field label="Email"><input type="email" value={nu.email} onChange={(e) => setNu({ ...nu, email: e.target.value })} /></Field>
           <Field label="Display name"><input value={nu.display_name} onChange={(e) => setNu({ ...nu, display_name: e.target.value })} /></Field>
-          <Field label="Temporary password (min 12, mixed case + digit)">
+          <Field label="Temporary password" hint={PASSWORD_HINT}>
             <input type="text" value={nu.password} onChange={(e) => setNu({ ...nu, password: e.target.value })} />
           </Field>
         </>
