@@ -29,6 +29,11 @@ curl -O https://raw.githubusercontent.com/abhid001/TESQIVO/main/docker-compose.y
 docker compose up -d
 ```
 
+> **Check the download first.** `cat docker-compose.yml` should show a ~2 KB file
+> beginning with `name: tesqivo`. If it says `404: Not Found`, the URL is wrong or
+> the repository is private — get the file directly from whoever sent you this
+> guide and save it as `docker-compose.yml`.
+
 `docker compose` pulls the `tesqivo`, `postgres:16-alpine`, and `redis:7-alpine`
 images and starts four containers: `web`, `worker`, `db`, `redis`. The `web`
 container applies its database schema automatically on first start.
@@ -200,8 +205,9 @@ Health endpoints: `/api/v1/healthz` (liveness), `/api/v1/readyz` (database check
 
 | Symptom | What to check |
 |---|---|
+| `docker compose up` fails with `non-string key at top level` or another YAML parse error | The `curl` downloaded a "404: Not Found" page, not the compose file — run `cat docker-compose.yml` (a valid file is ~2 KB and starts with `name: tesqivo`). Causes: the download URL is wrong, or the repository is private so the raw URL is not anonymously reachable. Re-download the correct URL, or get `docker-compose.yml` directly from whoever gave you this guide and save it in place. |
 | `web` keeps restarting | `docker compose logs web` — usually `db` not ready yet (it retries), or an invalid `TESQIVO_DB_URL` if you customised it. |
-| Manifest / image pull error | Confirm the host can reach `ghcr.io`. The image is public; no login is needed. |
+| Image pull error — `denied`, `manifest unknown`, `unauthorized` | The host cannot reach `ghcr.io`, **or** the image is not published/public yet. `docker pull ghcr.io/abhid001/tesqivo:latest` shows the real error. A published, public image needs no `docker login`. |
 | Login works, then drops on refresh | `TESQIVO_PUBLIC_URL` must exactly match how you reach the app. An `https` URL is required for the value to say `https://`. |
 | Blank page / assets 404 behind a proxy | The proxy must pass the original `Host` and route `/` and `/api` to the same upstream. |
 | `create-admin` says an admin already exists | A user is already present — add people from **Admin console → Users** instead. |
