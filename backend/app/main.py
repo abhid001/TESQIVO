@@ -34,7 +34,7 @@ def create_app() -> FastAPI:
     app = FastAPI(
         title="TESQIVO API",
         version=__version__,
-        description="API-first test management platform - Phase 1",
+        description="Open-source API-first test management platform (AGPL-3.0)",
         openapi_url=f"{API_PREFIX}/openapi.json",
         docs_url=f"{API_PREFIX}/docs",
         redoc_url=f"{API_PREFIX}/redoc",
@@ -58,6 +58,14 @@ def create_app() -> FastAPI:
         notifications_router.router,
     ):
         app.include_router(r, prefix=API_PREFIX)
+
+    # Enterprise edition: present only in the tesqivo-enterprise image.
+    try:
+        from app.ee import register_ee
+    except ModuleNotFoundError:
+        register_ee = None
+    if register_ee is not None:
+        register_ee(app, prefix=API_PREFIX)
 
     _mount_web_ui(app)
     return app

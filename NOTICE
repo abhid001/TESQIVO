@@ -1,0 +1,13 @@
+TESQIVO
+Copyright (c) 2026 Abhishek Dixit and the TESQIVO contributors
+
+The Community edition of this product is licensed under the GNU Affero General
+Public License v3.0 (see LICENSE). The `backend/app/ee/`, `frontend/src/ee/` and
+`Dockerfile.enterprise` paths are proprietary (see backend/app/ee/LICENSE and
+LICENSING.md).
+
+This product bundles third-party open-source components, each under its own
+licence, including (non-exhaustive): FastAPI, Starlette, Uvicorn, SQLAlchemy,
+Alembic, Pydantic, asyncpg, psycopg, argon2-cffi, redis-py, RQ, httpx, React,
+React Router, TanStack Query, Vite. Their licences and notices are retained in
+the corresponding package metadata within the distributed image.

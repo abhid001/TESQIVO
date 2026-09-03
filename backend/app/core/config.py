@@ -59,6 +59,11 @@ class Settings(BaseSettings):
     export_sync_row_limit: int = 5000
     environment: str = "production"
 
+    # --- Enterprise edition licensing (see app/core/license.py) ---
+    license_key: str = Field(default="", description="Signed Enterprise license key")
+    license_key_file: str = Field(default="/data/license.key", description="Fallback path for the key")
+    license_pubkey: str = Field(default="", description="Ed25519 public key (b64); baked into the EE image")
+
     # --- optional outbound email (self-service password reset) ---
     smtp_host: str | None = None
     smtp_port: int = 587
