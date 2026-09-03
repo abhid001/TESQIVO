@@ -7,6 +7,8 @@ from pydantic import BaseModel, Field
 
 from app.api.deps import CSRF_COOKIE, SESSION_COOKIE, CurrentActor, DbSession, RequestCtx
 from app.core.config import get_settings
+from app.core.errors import Forbidden
+from app.core.security import csrf_matches
 from app.domain import auth
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -63,6 +65,11 @@ async def create_session(
 
 @router.delete("/session", status_code=204)
 async def delete_session(request: Request, response: Response, db: DbSession, ctx: RequestCtx):
+    # Logout is an unsafe cookie-authenticated request, so it still needs the CSRF
+    # double-submit check (finding #11) - but not a *live* account, so it does not
+    # go through CurrentActor (a disabled / password-expired user can still log out).
+    if not csrf_matches(request.cookies.get(CSRF_COOKIE, ""), request.headers.get("x-csrf-token")):
+        raise Forbidden("Missing or invalid CSRF token.")
     token = request.cookies.get(SESSION_COOKIE)
     if token:
         await auth.logout(db, ctx, token)
@@ -114,12 +121,13 @@ class ChangePasswordRequest(BaseModel):
 
 @router.post("/password", status_code=204)
 async def change_password(
-    body: ChangePasswordRequest, actor: CurrentActor, db: DbSession, ctx: RequestCtx
+    body: ChangePasswordRequest, request: Request, actor: CurrentActor, db: DbSession, ctx: RequestCtx
 ):
     await auth.change_own_password(
         db, actor, ctx,
         current_password=body.current_password,
         new_password=body.new_password,
+        keep_session_token_hash=getattr(request.state, "session_token_hash", None),
     )
 
 

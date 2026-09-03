@@ -8,14 +8,21 @@ from fastapi import Depends, Header, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.context import Actor, Ctx, Source
-from app.core.errors import AuthenticationRequired, Forbidden
-from app.core.security import csrf_matches
+from app.core.errors import AuthenticationRequired, Forbidden, PasswordChangeRequired
+from app.core.security import csrf_matches, hash_token
 from app.domain import auth
 
 SESSION_COOKIE = "tesqivo_session"
 CSRF_COOKIE = "tesqivo_csrf"
 
 _SAFE_METHODS = {"GET", "HEAD", "OPTIONS"}
+
+# While must_change_password is set, only these (method, path) pairs are allowed.
+_PW_CHANGE_ALLOWED = {
+    ("GET", "/api/v1/auth/me"),
+    ("POST", "/api/v1/auth/password"),
+    ("DELETE", "/api/v1/auth/session"),
+}
 
 
 async def get_db(request: Request) -> AsyncSession:
@@ -48,7 +55,13 @@ async def current_actor(
         header = request.headers.get("x-csrf-token")
         if not csrf_matches(us.csrf_token, header):
             raise Forbidden("Missing or invalid CSRF token.")
+    # A pending forced password change locks the session to just that (finding #1).
+    if actor.must_change_password and (request.method, request.url.path) not in _PW_CHANGE_ALLOWED:
+        raise PasswordChangeRequired(
+            "You must set a new password before continuing. Open the change-password screen."
+        )
     request.state.actor = actor
+    request.state.session_token_hash = hash_token(token)
     return actor
 
 

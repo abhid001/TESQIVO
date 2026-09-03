@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Annotated
 
 from fastapi import APIRouter, Header, Response
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, Field
 from sqlalchemy import text
 
 from app import __version__
@@ -51,9 +51,11 @@ async def setup_status(db: DbSession) -> SetupStatus:
 
 
 class SetupRequest(BaseModel):
-    username: str = Field(min_length=3, max_length=64)
-    email: EmailStr
-    display_name: str = Field(min_length=1, max_length=200)
+    # Kept permissive on purpose: app.core.identity.validate_identity is the single
+    # source of truth for both this route and the CLI (finding #12).
+    username: str = Field(min_length=1, max_length=200)
+    email: str = Field(min_length=1, max_length=320)
+    display_name: str = Field(min_length=1, max_length=400)
     password: str = Field(min_length=1, max_length=256)
 
 

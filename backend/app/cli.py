@@ -20,6 +20,7 @@ from sqlalchemy import text
 
 from app.core.context import Ctx, Source
 from app.core.db import get_sessionmaker
+from app.core.identity import identity_errors
 from app.core.security import PASSWORD_POLICY, password_policy_errors
 from app.domain import auth
 
@@ -87,6 +88,9 @@ async def _create_admin(args: argparse.Namespace) -> None:
             display_name = username
         else:
             display_name = input(f"Display name [{username}]: ").strip() or username
+        errs = identity_errors(username=username, email=email, display_name=display_name)
+        if errs:
+            sys.exit("error: account details rejected:\n  - " + "\n  - ".join(errs))
         password = _prompt_password(args.password)
         ctx = Ctx(correlation_id="cli-create-admin", source=Source.system)
         try:
