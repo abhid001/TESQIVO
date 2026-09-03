@@ -112,7 +112,7 @@ Then `docker compose up -d` again to apply.
 | `TESQIVO_HTTP_PORT` | `8080` | Host port. |
 | `TESQIVO_VERSION` | `latest` | Image tag to run. |
 | `TESQIVO_SECRET_KEY` | auto-generated | Session/CSRF secret (≥32 bytes). Generated on first boot and kept in the data volume so logins survive restarts. Set it yourself only to manage it manually or share it across hosts. |
-| `TESQIVO_SMTP_HOST` / `_PORT` / `_USER` / `_PASSWORD` / `_FROM` | unset | Outbound email for self-service password reset. With email off, "Forgot password?" tells users to contact an administrator and admins reset accounts from the console. |
+| `TESQIVO_SMTP_HOST` / `_PORT` / `_USER` / `_PASSWORD` / `_FROM` | unset | Outbound email for self-service password reset. When set, "Forgot password?" emails a one-time link (valid 1 hour). With email off it tells users to contact an administrator, who resets accounts from the console. |
 
 ---
 

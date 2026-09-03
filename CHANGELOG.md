@@ -6,6 +6,20 @@ All notable changes to TESQIVO are documented here. The format follows
 
 ## [Unreleased]
 
+### Security (code review remediation)
+- Forced password changes are now enforced by the API, not just the SPA — a
+  session with `must_change_password` set can only reach `/auth/me`,
+  `/auth/password` and logout.
+- Session cookie tokens are stored as `SHA-256(token)`; the raw value lives only
+  in the browser. Existing sessions are invalidated once on upgrade (migration `0007`).
+- Self-service password reset now emails a **one-time link** — the password is not
+  changed and sessions are not revoked until the link is redeemed, so a failed
+  email can never lock a user out (D-020).
+- Changing your own password revokes every other session.
+- First-admin creation is serialized with a Postgres advisory lock.
+- Logout performs the CSRF check it previously skipped.
+- Username / email / display-name validation is shared by the CLI and the API.
+
 ## [0.2.0] — 2026-09-01
 
 ### Added

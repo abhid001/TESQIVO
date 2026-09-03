@@ -47,7 +47,15 @@ async def test_admin_account_always_contact_maintainer(client, admin, email_on):
 
 
 @pytest.mark.asyncio
-async def test_email_flow_sends_temp_password_and_forces_change(client, admin, api, email_on):
+def _token_from(body: str) -> str:
+    import re
+
+    m = re.search(r"[?&]token=([\w-]+)", body)
+    assert m, body
+    return m.group(1)
+
+
+async def test_email_flow_sends_a_link_and_does_not_change_the_password(client, admin, email_on):
     r = await admin.post(
         "/api/v1/users",
         json={"username": "alice", "email": "alice@example.com", "display_name": "Alice", "password": "AlicePass01!"},
@@ -59,31 +67,56 @@ async def test_email_flow_sends_temp_password_and_forces_change(client, admin, a
     assert len(email_on.outbox) == 1
     msg = email_on.outbox[0]
     assert msg["to"] == "alice@example.com"
-    temp = [
-        line.split("Temporary password:")[1].strip()
-        for line in msg["body"].splitlines()
-        if "Temporary password:" in line
-    ][0]
+    assert "/reset?token=" in msg["body"]
+    token = _token_from(msg["body"])
 
-    # old password no longer works
+    # the current password STILL works - nothing changed yet (finding #2)
     r = await client.post("/api/v1/auth/session", json={"username": "alice", "password": "AlicePass01!"})
-    assert r.status_code == 401
-
-    # temp password works and forces a change
-    r = await client.post("/api/v1/auth/session", json={"username": "alice", "password": temp})
     assert r.status_code == 201
-    assert r.json()["must_change_password"] is True
 
-    csrf = client.cookies.get("tesqivo_csrf")
+    # redeem the link
     r = await client.post(
-        "/api/v1/auth/password",
-        json={"current_password": temp, "new_password": "AliceBrandNew1!"},
-        headers={"X-CSRF-Token": csrf, "X-Tesqivo-Client": "web"},
+        "/api/v1/auth/password-reset/complete",
+        json={"token": token, "new_password": "AliceBrandNew1!"},
     )
     assert r.status_code == 204
 
-    r = await client.get("/api/v1/auth/me", headers={"X-Tesqivo-Client": "web"})
-    assert r.json()["must_change_password"] is False
+    # now the old password is dead and the new one works
+    assert (await client.post("/api/v1/auth/session", json={"username": "alice", "password": "AlicePass01!"})).status_code == 401
+    assert (await client.post("/api/v1/auth/session", json={"username": "alice", "password": "AliceBrandNew1!"})).status_code == 201
+
+    # the link is single-use
+    r = await client.post(
+        "/api/v1/auth/password-reset/complete",
+        json={"token": token, "new_password": "AnotherOne99!"},
+    )
+    assert r.status_code == 401
+
+
+async def test_reset_link_still_generic_and_password_intact_when_mail_fails(client, admin, monkeypatch):
+    from app.core.mailer import set_mailer_for_tests
+
+    r = await admin.post(
+        "/api/v1/users",
+        json={"username": "bob", "email": "bob@example.com", "display_name": "Bob", "password": "BobsPass012!"},
+    )
+    assert r.status_code == 201
+
+    monkeypatch.setattr(Settings, "email_enabled", property(lambda self: True))
+
+    class _Boom:
+        async def send(self, **_):
+            raise RuntimeError("smtp down")
+
+    set_mailer_for_tests(_Boom())
+    try:
+        r = await client.post("/api/v1/auth/password-reset/request", json={"identifier": "bob"})
+        assert r.status_code == 200
+        assert r.json()["outcome"] == "email_sent"  # unchanged, no disclosure
+        # password is untouched despite the mail failure
+        assert (await client.post("/api/v1/auth/session", json={"username": "bob", "password": "BobsPass012!"})).status_code == 201
+    finally:
+        set_mailer_for_tests(None)
 
 
 @pytest.mark.asyncio

@@ -19,6 +19,7 @@ import { LoginPage } from "./pages/LoginPage";
 import { ProfilePage } from "./pages/ProfilePage";
 import { SetupPage } from "./pages/SetupPage";
 import { ChangePasswordPage } from "./pages/ChangePasswordPage";
+import { ResetPasswordPage } from "./pages/ResetPasswordPage";
 import { ProjectPicker } from "./pages/ProjectPicker";
 import { AdminConsole } from "./pages/admin/AdminConsole";
 import { ProjectSettingsPage } from "./pages/ProjectSettingsPage";
@@ -160,6 +161,7 @@ function Shell() {
 
 export function App() {
   const { me, loading } = useAuth();
+  const { pathname } = useLocation();
   const [needsSetup, setNeedsSetup] = useState<boolean | null>(null);
 
   useEffect(() => {
@@ -169,6 +171,8 @@ export function App() {
       .catch(() => setNeedsSetup(false));
   }, [me]);
 
+  // Public reset-link page - reachable while signed out (or signed in on another device).
+  if (pathname === "/reset") return <ResetPasswordPage />;
   if (loading || needsSetup === null) return <div className="centered">Loading…</div>;
   if (needsSetup) return <SetupPage onDone={() => setNeedsSetup(false)} />;
   if (!me) return <LoginPage />;

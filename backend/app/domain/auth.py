@@ -596,10 +596,13 @@ class ResetOutcome:
     CONTACT_MAINTAINER = "contact_maintainer"
 
 
+_RESET_TOKEN_TTL = timedelta(hours=1)
+
 _OUTCOME_MESSAGES = {
     ResetOutcome.EMAIL_SENT: (
-        "If an account matches that username or email, a temporary password has been "
-        "sent to the address on file. Sign in with it, then choose a new password."
+        "If an account matches that username or email, a link to choose a new password "
+        "has been emailed to the address on file. The link is valid for one hour; your "
+        "current password keeps working until you use it."
     ),
     ResetOutcome.EMAIL_UNAVAILABLE: (
         "Password reset by email is not configured on this server. Contact your "
@@ -649,39 +652,47 @@ async def request_password_reset(
 
     # Email is configured. Only act for a real, active, non-admin account; otherwise
     # return the same generic message so account existence is not disclosed.
+    #
+    # A one-time link is issued (finding #2): the password is NOT changed and no
+    # sessions are revoked until the link is redeemed via complete_password_reset,
+    # so a failed email never locks anyone out.
     if user is not None and user.status == "active":
-        temp = _generate_temp_password()
-        user.password_hash = hash_password(temp)
-        user.must_change_password = True
-        user.failed_login_count = 0
-        user.locked_until = None
         await session.execute(
-            UserSession.__table__.update()
-            .where(UserSession.user_id == user.id, UserSession.revoked_at.is_(None))
-            .values(revoked_at=_now())
+            update(PasswordResetToken)
+            .where(PasswordResetToken.user_id == user.id, PasswordResetToken.used_at.is_(None))
+            .values(used_at=_now())  # invalidate any earlier unused link
+        )
+        raw = secrets.token_urlsafe(32)
+        session.add(
+            PasswordResetToken(
+                user_id=user.id,
+                token_hash=hash_token(raw),
+                created_by=user.id,
+                expires_at=_now() + _RESET_TOKEN_TTL,
+            )
         )
         audit.record(
             session, actor=Actor.system(), ctx=ctx, entity_type="user",
-            action="user.password_reset_email_sent", entity_id=user.id,
+            action="user.password_reset_link_issued", entity_id=user.id,
         )
         await session.commit()
+        link = f"{settings.public_url.rstrip('/')}/reset?token={raw}"
         try:
             await get_mailer().send(
                 to=user.email,
-                subject="TESQIVO temporary password",
+                subject="Reset your TESQIVO password",
                 body=(
                     f"Hello {user.display_name},\n\n"
                     "A password reset was requested for your TESQIVO account.\n\n"
-                    f"Temporary password: {temp}\n\n"
-                    f"Sign in at {settings.public_url} with this temporary password. "
-                    "You will be asked to set a new password immediately.\n\n"
-                    "If you did not request this, contact your administrator - your "
-                    "previous password no longer works.\n"
+                    f"Open this link within one hour to choose a new password:\n{link}\n\n"
+                    "Your current password keeps working until you complete the reset.\n"
+                    "If you did not request this, you can ignore this email.\n"
                 ),
             )
         except Exception:  # noqa: BLE001
-            log = __import__("logging").getLogger("tesqivo.mailer")
-            log.exception("failed to send password-reset email")
+            __import__("logging").getLogger("tesqivo.mailer").exception(
+                "failed to send password-reset email"
+            )
     else:
         audit.record(
             session, actor=Actor.system(), ctx=ctx, entity_type="user",

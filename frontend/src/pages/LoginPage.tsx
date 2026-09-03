@@ -105,7 +105,8 @@ function ForgotForm({ onBack }: { onBack: () => void }) {
         <form onSubmit={submit} className="stack">
           <p className="muted" style={{ marginTop: 0 }}>
             Enter your username or email. If email is configured on this server and
-            your account is eligible, a temporary password will be sent to you.
+            your account is eligible, a link to choose a new password will be sent
+            to you. Your current password keeps working until you use it.
           </p>
           <Field label="Username or email" error={error ?? undefined}>
             <input value={identifier} onChange={(e) => setId(e.target.value)} autoFocus />
