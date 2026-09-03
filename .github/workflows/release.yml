@@ -14,42 +14,45 @@ permissions:
   contents: read
   packages: write
 
-env:
-  IMAGE: ghcr.io/${{ github.repository_owner }}/tesqivo
-
 jobs:
   image:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: docker/setup-qemu-action@v3
-      - uses: docker/setup-buildx-action@v3
+      - name: Build and push to GHCR
+        env:
+          REF: ${{ github.ref }}
+          REPO: ${{ github.repository }}
+          ACTOR: ${{ github.actor }}
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -eu
+          image="ghcr.io/$(printf '%s' "$REPO" | tr '[:upper:]' '[:lower:]')"
 
-      - uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          case "$REF" in
+            refs/tags/v*)
+              v="${REF#refs/tags/}"                        # v1.2.3
+              tags="-t $image:$v -t $image:${v%.*} -t $image:latest"
+              platforms="linux/amd64,linux/arm64"
+              version="$v"
+              ;;
+            *)
+              tags="-t $image:edge"
+              platforms="linux/amd64"
+              version="edge-$(git rev-parse --short HEAD)"
+              ;;
+          esac
 
-      - id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.IMAGE }}
-          tags: |
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/v') }}
-            type=raw,value=edge,enable=${{ github.ref == 'refs/heads/main' }}
+          echo "$TOKEN" | docker login ghcr.io -u "$ACTOR" --password-stdin
+          docker run --privileged --rm tonistiigi/binfmt --install arm64
+          docker buildx create --use --driver docker-container
 
-      - uses: docker/build-push-action@v6
-        with:
-          context: .
-          push: true
-          platforms: ${{ startsWith(github.ref, 'refs/tags/v') && 'linux/amd64,linux/arm64' || 'linux/amd64' }}
-          build-args: |
-            TESQIVO_VERSION=${{ steps.meta.outputs.version }}
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          # shellcheck disable=SC2086
+          docker buildx build \
+            --platform "$platforms" \
+            --build-arg "TESQIVO_VERSION=$version" \
+            --provenance false \
+            $tags \
+            --push \
+            .
