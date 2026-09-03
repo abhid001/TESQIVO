@@ -31,6 +31,6 @@ cross-module contract (PRS §1). Format: ID · date · decision · rationale · 
 |---|---|---|
 | OQ-1 | Exact duplicate-handling policy wording per import entity (update vs skip vs error) surfaced in UI | Import increment 11 |
 | OQ-2 | Whether Phase 1 needs project-level timezone override vs instance default only | Date-boundary metrics §9.1 |
-| OQ-3 | Rate-limit thresholds per endpoint class (auth vs read vs write vs bulk) | Security hardening increment 12 |
+| OQ-3 | Rate-limit thresholds per endpoint class (auth vs read vs write vs bulk); a shared (Redis) limiter for multi-replica. Partly addressed 2026-09-03: in-process limiter now keys on the real client IP via `TESQIVO_TRUSTED_PROXIES` and evicts stale keys. | Security hardening increment 12 |
 | OQ-4 | Retention period for `user_session`, resolved `background_job`, import staging files | Ops / storage growth |
 | OQ-5 | *Resolved by D-012* — license is Proprietary | — |

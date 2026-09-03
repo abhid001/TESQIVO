@@ -14,6 +14,13 @@ name: tesqivo
 # public interface, set TESQIVO_HTTP_PORT=127.0.0.1:8080 before `up`.
 
 services:
+  web:
+    # Trust Caddy's X-Forwarded-For so rate limiting keys on the real caller.
+    # Caddy reaches web from the compose network (a private range). Pin
+    # TESQIVO_HTTP_PORT=127.0.0.1:8080 so only Caddy can talk to web directly.
+    environment:
+      TESQIVO_TRUSTED_PROXIES: ${TESQIVO_TRUSTED_PROXIES:-10.0.0.0/8,172.16.0.0/12,192.168.0.0/16,127.0.0.1}
+
   caddy:
     image: caddy:2-alpine
     environment:

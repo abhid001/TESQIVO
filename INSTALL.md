@@ -116,6 +116,7 @@ Then `docker compose up -d` again to apply.
 | `TESQIVO_PUBLIC_URL` | `http://localhost:8080` | Absolute base URL for links and cookies. |
 | `TESQIVO_HTTP_PORT` | `8080` | Host port. |
 | `TESQIVO_VERSION` | `latest` | Image tag to run. |
+| `TESQIVO_TRUSTED_PROXIES` | unset | Reverse-proxy / Cloudflare IPs or CIDRs, so rate limiting uses the real client IP. `*` trusts any direct peer. |
 | `TESQIVO_SECRET_KEY` | auto-generated | Session/CSRF secret (≥32 bytes). Generated on first boot and kept in the data volume so logins survive restarts. Set it yourself only to manage it manually or share it across hosts. |
 | `TESQIVO_SMTP_HOST` / `_PORT` / `_USER` / `_PASSWORD` / `_FROM` | unset | Outbound email for self-service password reset. With email off, "Forgot password?" tells users to contact an administrator and admins reset accounts from the console. |
 

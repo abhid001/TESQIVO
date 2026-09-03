@@ -48,6 +48,7 @@ Other useful ones:
 | Variable | Default | Notes |
 |---|---|---|
 | `TESQIVO_VERSION` | `latest` | pin a released tag, e.g. `v0.2.0` |
+| `TESQIVO_TRUSTED_PROXIES` | unset | IPs / CIDRs of your reverse proxy or Cloudflare, so the real client IP (not the proxy's) is used for rate limiting. `*` trusts any direct peer — only safe when the app is unreachable except through your proxy. |
 | `TESQIVO_SECRET_KEY` | auto-generated | a random key is created on first boot and stored at `/data/secret_key` inside the `appdata` volume so sessions survive restarts. Set this explicitly only if you want to manage it yourself or run more than one host against the same database. |
 | `TESQIVO_SMTP_*` | unset | outbound email for self-service password reset. With email off, "Forgot password?" tells users to contact an admin, and admins reset accounts from the console. Administrator accounts are never emailed a temporary password. |
 

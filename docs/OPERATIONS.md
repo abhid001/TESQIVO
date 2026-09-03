@@ -81,10 +81,13 @@ DELETE FROM user_session WHERE expires_at < now() - interval '30 days';
 
 ## Rate limiting (OQ-3)
 
-Phase 1 uses an in-process sliding-window limiter (per client + path class);
-auth endpoints are capped tighter. For multi-instance deployments, front with a
-shared limiter (reverse proxy or Redis token bucket) — documented as the upgrade
-path, not implemented in Phase 1.
+Phase 1 uses an in-process sliding-window limiter (per client IP + path class);
+auth endpoints are capped tighter. Stale keys are swept so memory stays bounded.
+Behind a proxy or Cloudflare, set `TESQIVO_TRUSTED_PROXIES` (IPs / CIDRs, or `*`)
+so the limiter keys on the real client IP from `CF-Connecting-IP` /
+`X-Forwarded-For` rather than the proxy address. For multi-instance deployments,
+front with a shared limiter (reverse proxy or a Redis token bucket) — documented
+as the upgrade path, not implemented in Phase 1.
 
 ## Observability
 

@@ -58,6 +58,27 @@ class Settings(BaseSettings):
     rate_limit_per_minute: int = 240
     export_sync_row_limit: int = 5000
     environment: str = "production"
+    # Comma-separated IPs / CIDRs of reverse proxies whose forwarded-for headers
+    # are trusted for the real client IP (rate limiting). "*" trusts any direct
+    # peer - only safe when the app is never reachable except through your proxy.
+    trusted_proxies: str = ""
+
+    @property
+    def trusted_proxy_networks(self) -> list:
+        import ipaddress
+
+        nets = []
+        for part in self.trusted_proxies.split(","):
+            part = part.strip()
+            if not part:
+                continue
+            if part == "*":
+                return ["*"]
+            try:
+                nets.append(ipaddress.ip_network(part, strict=False))
+            except ValueError:
+                continue
+        return nets
 
     # --- optional outbound email (self-service password reset) ---
     smtp_host: str | None = None
