@@ -53,17 +53,27 @@ export async function api<T = unknown>(path: string, opts: Options = {}): Promis
   if (opts.raw) return res as unknown as T;
   if (res.status === 204) return undefined as T;
   const text = await res.text();
-  const data = text ? JSON.parse(text) : undefined;
+  let data: unknown;
+  try {
+    data = text ? JSON.parse(text) : undefined;
+  } catch {
+    // A proxy HTML page, a plain-text 502, a truncated body - not our envelope.
+    data = undefined;
+  }
+  const body = data as { error?: ApiErrorBody } | undefined;
   if (!res.ok) {
     throw new ApiError(
-      data?.error ?? {
+      body?.error ?? ({
         code: "UNKNOWN",
-        message: `Request failed (${res.status})`,
+        message:
+          res.status >= 502 && res.status <= 504
+            ? "The server is unavailable. Try again in a moment."
+            : `Request failed (${res.status})`,
         status: res.status,
         correlation_id: res.headers.get("x-correlation-id") ?? "",
         details: [],
-        retryable: false,
-      },
+        retryable: res.status >= 500,
+      } satisfies ApiErrorBody),
     );
   }
   return data as T;

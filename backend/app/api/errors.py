@@ -50,6 +50,17 @@ async def integrity_error_handler(request: Request, exc: IntegrityError) -> JSON
     return JSONResponse(status_code=409, content=env)
 
 
+async def value_error_handler(request: Request, exc: ValueError) -> JSONResponse:
+    # A bare ValueError out of a router almost always means malformed input that
+    # was fed to a converter - most commonly uuid.UUID("...") on a bad path
+    # segment (finding #6). Return the structured 422 rather than a 500.
+    env = error_envelope(
+        ValidationFailed("The request contains an invalid identifier or value."),
+        _corr(request),
+    )
+    return JSONResponse(status_code=422, content=env)
+
+
 async def unhandled_error_handler(request: Request, exc: Exception) -> JSONResponse:
     log.exception("unhandled error", extra={"correlation_id": _corr(request)})
     env = error_envelope(DomainError("An internal error occurred."), _corr(request))
@@ -60,4 +71,5 @@ def install(app) -> None:
     app.add_exception_handler(DomainError, domain_error_handler)
     app.add_exception_handler(RequestValidationError, validation_error_handler)
     app.add_exception_handler(IntegrityError, integrity_error_handler)
+    app.add_exception_handler(ValueError, value_error_handler)
     app.add_exception_handler(Exception, unhandled_error_handler)
