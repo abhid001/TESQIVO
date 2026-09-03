@@ -5,7 +5,7 @@ the codebase coherent with the product specification.
 
 ## Authority
 
-`project_docs/TESQIVO_Product_Requirements_v4.md` is the product and domain
+`docs/TESQIVO_Product_Requirements_v4.md` is the product and domain
 authority. `docs/architecture/` holds the design artifacts and the decision log
 (`16_decisions.md`). Any change that becomes a cross-module contract must be
 recorded there before it lands.

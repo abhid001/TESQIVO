@@ -1,8 +1,9 @@
 # TESQIVO
 
-Open-source, API-first test management and quality engineering platform.
-Self-hosted via Docker Compose. See
-[`project_docs/TESQIVO_Product_Requirements_v4.md`](project_docs/TESQIVO_Product_Requirements_v4.md)
+API-first test management and quality engineering platform, self-hosted via
+Docker Compose. Proprietary — source-available for authorized evaluation only
+(see [LICENSE](LICENSE)). See
+[`docs/TESQIVO_Product_Requirements_v4.md`](docs/TESQIVO_Product_Requirements_v4.md)
 for the product specification and [`docs/architecture/`](docs/architecture/) for the
 design artifacts (14 diagrams, decision log, metric fixtures).
 
@@ -97,4 +98,7 @@ make restore BACKUP=backups/db-XXXX.dump ATTACH=backups/appdata-XXXX.tgz
 
 ## License
 
-Apache-2.0 (proposed — see decision D-012). See [LICENSE](LICENSE).
+Proprietary — Copyright © 2026 Abhishek Dixit, all rights reserved. This is **not**
+open-source software. Access is granted for authorized evaluation only; no right to
+use in production, redistribute, or disclose is granted except by separate written
+agreement. See [LICENSE](LICENSE).

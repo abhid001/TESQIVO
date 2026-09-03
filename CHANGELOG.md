@@ -6,6 +6,11 @@ All notable changes to TESQIVO are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+- **License is now Proprietary** (`LICENSE`) — not open-source. Source-available for
+  authorized evaluation only. Supersedes the earlier proposed Apache-2.0 (D-012).
+- All product-requirements documents moved from `project_docs/` into `docs/`.
+
 ## [0.2.0] — 2026-09-01
 
 ### Added

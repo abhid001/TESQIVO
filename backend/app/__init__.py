@@ -1,4 +1,4 @@
-"""TESQIVO - open-source API-first test management platform (Phase 1)."""
+"""TESQIVO - API-first test management platform (Phase 1)."""
 
 import os
 

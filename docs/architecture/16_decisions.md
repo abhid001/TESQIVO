@@ -16,7 +16,7 @@ cross-module contract (PRS §1). Format: ID · date · decision · rationale · 
 | D-009 | 2026-08-27 | Entity keys: `<PROJECT_KEY>-<TYPE>-<seq>`, seq from row-locked `entity_counter` per (project, type), never reused | PRS §5 readable, project-unique, immutable, never reused | maintainers | accepted |
 | D-010 | 2026-08-27 | Non-member access to a project resource returns `404 RESOURCE_NOT_FOUND`, not `403` | PRS §13 "Errors never expose ... inaccessible-resource details"; avoids existence disclosure. `403` used when actor IS a member but lacks the specific action. | maintainers | accepted |
 | D-011 | 2026-08-27 | CSRF: SameSite=Lax cookie + required custom header (`X-CSRF-Token` double-submit) on unsafe methods | PRS §15 "CSRF protection where applicable"; SPA same-origin via Caddy | maintainers | accepted |
-| D-012 | 2026-08-27 | License = Apache-2.0 | Permissive, patent grant, common for infra tooling; PRS §16 requires a decision before first public release | maintainers | proposed — confirm before v1.0 tag |
+| D-012 | 2026-09-03 | License = **Proprietary** (`LICENSE`, "TESQIVO — Proprietary License"). Not open-source. Source-available to authorized evaluators only; no production, redistribution, or disclosure rights without a separate written agreement. Supersedes the earlier proposed Apache-2.0. | The project is not being released as open-source at this time; keep options open for a commercial / cloud path | owner | accepted — revisit if an OSS or dual-license model is chosen later |
 | D-013 | 2026-08-27 | Supported baseline: Docker 24+, PostgreSQL 16, Redis 7, latest 2 stable Chrome/Edge/Firefox | PRS §14, §16 | maintainers | accepted |
 | D-014 | 2026-08-27 | `RETEST_PENDING` is triggered explicitly via `POST /cycle-tests/{id}/retest`; it is a derived display state, not stored | PRS §7.3 describes it as "an explicit derived indicator" | maintainers | accepted |
 | D-015 | 2026-08-27 | Attachment storage path: `{ATTACHMENT_DIR}/{project_id}/{parent_type}/{yyyy}/{mm}/{uuid}{ext}`; stored name is a generated UUID, original name kept in DB only | PRS §12 safe generated names, path protection | maintainers | accepted |
@@ -33,4 +33,4 @@ cross-module contract (PRS §1). Format: ID · date · decision · rationale · 
 | OQ-2 | Whether Phase 1 needs project-level timezone override vs instance default only | Date-boundary metrics §9.1 |
 | OQ-3 | Rate-limit thresholds per endpoint class (auth vs read vs write vs bulk) | Security hardening increment 12 |
 | OQ-4 | Retention period for `user_session`, resolved `background_job`, import staging files | Ops / storage growth |
-| OQ-5 | Confirm Apache-2.0 (D-012) | Governance §16, blocks public release only |
+| OQ-5 | *Resolved by D-012* — license is Proprietary | — |
