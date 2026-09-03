@@ -15,6 +15,13 @@ _hasher: PasswordHasher | None = None
 
 MIN_PASSWORD_LENGTH = 12
 
+# Human-readable statement of the policy, shown in prompts and error messages.
+PASSWORD_POLICY = (
+    f"at least {MIN_PASSWORD_LENGTH} characters, and must include an upper-case letter, "
+    "a lower-case letter, a digit, and a special character (for example ! ? @ # $ % & *). "
+    "Any extra letters, digits, or symbols beyond these are fine."
+)
+
 
 def _ph() -> PasswordHasher:
     global _hasher
@@ -47,13 +54,23 @@ def needs_rehash(hashed: str) -> bool:
 
 
 def password_policy_errors(plain: str) -> list[str]:
+    """Return one message per unmet requirement (empty list = acceptable).
+
+    Every check is a *minimum* ("contains at least one ..."); nothing is
+    forbidden, so a longer password with extra letters or symbols always passes
+    as long as the required character classes are present.
+    """
     errs: list[str] = []
     if len(plain) < MIN_PASSWORD_LENGTH:
-        errs.append(f"Password must be at least {MIN_PASSWORD_LENGTH} characters.")
-    if plain.lower() == plain or plain.upper() == plain:
-        errs.append("Password must contain both upper and lower case letters.")
+        errs.append(f"Use at least {MIN_PASSWORD_LENGTH} characters (yours has {len(plain)}).")
+    if not any(c.islower() for c in plain):
+        errs.append("Add at least one lower-case letter (a-z).")
+    if not any(c.isupper() for c in plain):
+        errs.append("Add at least one upper-case letter (A-Z).")
     if not any(c.isdigit() for c in plain):
-        errs.append("Password must contain at least one digit.")
+        errs.append("Add at least one digit (0-9).")
+    if not any(not c.isalnum() and not c.isspace() for c in plain):
+        errs.append("Add at least one special character, e.g. ! ? @ # $ % & *")
     return errs
 
 

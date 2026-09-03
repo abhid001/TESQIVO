@@ -92,8 +92,9 @@ curl -fsS http://localhost:8080/api/v1/version     # the running build
 docker compose exec web python -m app.cli create-admin
 ```
 
-Answer the prompts (username, email, display name, password — min 12 chars,
-upper + lower + a digit), or pass `--username --email --password`. Then sign in
+Answer the prompts (username, email, display name, password — at least 12 chars
+with an upper-case letter, a lower-case letter, a digit, and a special character),
+or pass `--username --email --password`. Then sign in
 at the URL. This command works only while no user exists; afterwards, manage
 people from the in-app admin console.
 

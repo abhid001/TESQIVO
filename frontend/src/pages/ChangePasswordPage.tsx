@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { http } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
-import { Card, Field, errText } from "../ui";
+import { Card, Field, PASSWORD_HINT, errText } from "../ui";
 import { Logo } from "../components/Logo";
 
 export function ChangePasswordPage({ forced = false }: { forced?: boolean }) {
@@ -54,7 +54,7 @@ export function ChangePasswordPage({ forced = false }: { forced?: boolean }) {
             <Field label={forced ? "Temporary password" : "Current password"}>
               <input type="password" value={current} onChange={(e) => setCurrent(e.target.value)} autoFocus />
             </Field>
-            <Field label="New password (min 12 chars, mixed case + digit)">
+            <Field label="New password" hint={PASSWORD_HINT}>
               <input type="password" value={next} onChange={(e) => setNext(e.target.value)} />
             </Field>
             <Field label="Confirm new password" error={error ?? undefined}>

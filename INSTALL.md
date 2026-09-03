@@ -57,7 +57,9 @@ Answer the prompts:
 - **Username** — e.g. `admin`
 - **Email**
 - **Display name**
-- **Password** — at least 12 characters, with upper case, lower case, and a digit
+- **Password** — at least 12 characters, and must include an upper-case letter, a
+  lower-case letter, a digit, and a special character (e.g. `! ? @ # $ % & *`).
+  Extra characters beyond these are fine.
 
 Non-interactive (for scripted installs):
 

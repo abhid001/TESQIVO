@@ -36,7 +36,7 @@ class NewUser(BaseModel):
     username: str = Field(min_length=3, max_length=64)
     email: str
     display_name: str = ""
-    password: str = Field(min_length=12, max_length=256)
+    password: str = Field(min_length=1, max_length=256)
 
 
 class MemberRequest(BaseModel):

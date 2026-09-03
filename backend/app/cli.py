@@ -20,6 +20,7 @@ from sqlalchemy import text
 
 from app.core.context import Ctx, Source
 from app.core.db import get_sessionmaker
+from app.core.security import PASSWORD_POLICY, password_policy_errors
 from app.domain import auth
 
 
@@ -50,13 +51,27 @@ def _prompt(label: str, current: str | None) -> str:
 
 
 def _prompt_password(current: str | None) -> str:
-    if current:
+    """Interactively prompt (re-asking until the policy is met), or validate the
+    value passed via --password once and exit with the full reason if it fails."""
+    if current is not None:
+        errs = password_policy_errors(current)
+        if errs:
+            sys.exit("error: password rejected — " + PASSWORD_POLICY + "\n  - " + "\n  - ".join(errs))
         return current
-    first = getpass.getpass("Password (min 12 chars): ")
-    second = getpass.getpass("Password (again): ")
-    if first != second:
-        sys.exit("error: passwords do not match")
-    return first
+
+    print(f"Password policy: {PASSWORD_POLICY}")
+    while True:
+        first = getpass.getpass("Password: ")
+        errs = password_policy_errors(first)
+        if errs:
+            print("  password rejected:")
+            for e in errs:
+                print(f"  - {e}")
+            continue
+        if getpass.getpass("Password (again): ") != first:
+            print("  the two entries did not match, try again")
+            continue
+        return first
 
 
 async def _create_admin(args: argparse.Namespace) -> None:
@@ -94,7 +109,10 @@ def main() -> None:
     ca.add_argument("--username")
     ca.add_argument("--email")
     ca.add_argument("--display-name")
-    ca.add_argument("--password", help="avoid on shared shells; prefer the interactive prompt")
+    ca.add_argument(
+        "--password",
+        help=f"avoid on shared shells; prefer the interactive prompt. Policy: {PASSWORD_POLICY}",
+    )
 
     args = parser.parse_args()
     if args.command == "wait-db":

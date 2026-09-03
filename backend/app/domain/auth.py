@@ -24,6 +24,7 @@ from app.core.errors import (
     ValidationFailed,
 )
 from app.core.security import (
+    PASSWORD_POLICY,
     hash_password,
     hash_token,
     needs_rehash,
@@ -246,7 +247,8 @@ def _validate_password(password: str) -> None:
     errs = password_policy_errors(password)
     if errs:
         raise ValidationFailed(
-            "Password does not meet the policy.",
+            f"Password does not meet the requirements ({PASSWORD_POLICY.rstrip('. ')}). "
+            + " ".join(errs),
             details=[{"field": "/password", "code": "WEAK_PASSWORD", "message": e} for e in errs],
         )
 
@@ -557,14 +559,17 @@ _TEMP_PW_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789"
 
 
 def _generate_temp_password(length: int = 16) -> str:
-    # Always satisfies the password policy (mixed case + digit, >= 12).
-    body = "".join(secrets.choice(_TEMP_PW_ALPHABET) for _ in range(length - 3))
-    return (
-        secrets.choice("ABCDEFGHJKLMNPQRSTUVWXYZ")
-        + secrets.choice("abcdefghijkmnpqrstuvwxyz")
-        + secrets.choice("23456789")
-        + body
-    )
+    # Always satisfies the password policy: upper + lower + digit + special, >= 12.
+    body = "".join(secrets.choice(_TEMP_PW_ALPHABET) for _ in range(max(length - 4, 4)))
+    chars = [
+        secrets.choice("ABCDEFGHJKLMNPQRSTUVWXYZ"),
+        secrets.choice("abcdefghijkmnpqrstuvwxyz"),
+        secrets.choice("23456789"),
+        secrets.choice("!@#$%*?-_"),
+        *body,
+    ]
+    secrets.SystemRandom().shuffle(chars)
+    return "".join(chars)
 
 
 class ResetOutcome:

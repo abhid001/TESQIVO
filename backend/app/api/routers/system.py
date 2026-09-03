@@ -54,7 +54,7 @@ class SetupRequest(BaseModel):
     username: str = Field(min_length=3, max_length=64)
     email: EmailStr
     display_name: str = Field(min_length=1, max_length=200)
-    password: str = Field(min_length=12, max_length=256)
+    password: str = Field(min_length=1, max_length=256)
 
 
 class UserOut(BaseModel):

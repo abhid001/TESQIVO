@@ -27,7 +27,7 @@ class CreateUserRequest(BaseModel):
     username: str = Field(min_length=3, max_length=64)
     email: EmailStr
     display_name: str = Field(min_length=1, max_length=200)
-    password: str = Field(min_length=12, max_length=256)
+    password: str = Field(min_length=1, max_length=256)
     is_system_admin: bool = False
 
 
@@ -38,7 +38,7 @@ class StatusRequest(BaseModel):
 class UpdateUserRequest(BaseModel):
     display_name: str | None = None
     email: EmailStr | None = None
-    password: str | None = Field(default=None, min_length=12, max_length=256)
+    password: str | None = Field(default=None, min_length=1, max_length=256)
 
 
 class ResetOut(BaseModel):
