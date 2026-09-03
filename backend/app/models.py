@@ -15,11 +15,13 @@ from sqlalchemy import (
     Boolean,
     CheckConstraint,
     ForeignKey,
+    Index,
     Integer,
     String,
     Text,
     UniqueConstraint,
     func,
+    text,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -123,7 +125,16 @@ class ProjectMembership(UUIDMixin, Base):
         CheckConstraint(
             "role in ('project_admin','test_manager','tester','viewer')", name="role_valid"
         ),
-        UniqueConstraint("project_id", "user_id", "status", name="one_active_membership"),
+        # At most one *active* membership per (project, user); any number of
+        # historical status='removed' rows is fine (finding #4).
+        Index(
+            "uq_project_membership_active",
+            "project_id",
+            "user_id",
+            unique=True,
+            postgresql_where=text("status = 'active'"),
+            sqlite_where=text("status = 'active'"),
+        ),
     )
 
 
