@@ -11,7 +11,7 @@ import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import delete, func, or_, select, update
+from sqlalchemy import delete, func, or_, select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
@@ -23,6 +23,7 @@ from app.core.errors import (
     SetupAlreadyCompleted,
     ValidationFailed,
 )
+from app.core.identity import DISPLAY_NAME_MAX, DISPLAY_NAME_MIN, validate_identity
 from app.core.security import (
     PASSWORD_POLICY,
     hash_password,
@@ -49,9 +50,19 @@ class SessionCreated:
     actor: Actor
 
 
+_SETUP_LOCK_KEY = 4_991_270  # arbitrary constant for pg_advisory_xact_lock
+
+
 async def needs_setup(session: AsyncSession) -> bool:
     count = await session.scalar(select(func.count()).select_from(User))
     return (count or 0) == 0
+
+
+async def _lock_setup(session: AsyncSession) -> None:
+    """Serialize concurrent first-admin creation (finding #9). The transaction-scoped
+    advisory lock is released on commit/rollback; a no-op on SQLite (tests)."""
+    if get_settings().db_url.startswith("postgresql"):
+        await session.execute(text("SELECT pg_advisory_xact_lock(:k)"), {"k": _SETUP_LOCK_KEY})
 
 
 async def create_first_admin(
@@ -65,8 +76,10 @@ async def create_first_admin(
 ) -> User:
     """Create the initial System Admin. Only possible while no user exists; the
     caller is the gate (bootstrap token for the HTTP path, shell access for the CLI)."""
+    await _lock_setup(session)
     if not await needs_setup(session):
         raise SetupAlreadyCompleted("Initial setup has already been completed.")
+    validate_identity(username=username, email=email, display_name=display_name)
     _validate_password(password)
     user = User(
         username=username.strip(),
@@ -148,12 +161,12 @@ async def authenticate(
     user.failed_login_count = 0
     user.locked_until = None
 
-    token_id = new_session_id()
+    raw_token = new_session_id()
     csrf = new_csrf_token()
     expires = _now() + timedelta(hours=settings.session_ttl_hours)
     session.add(
         UserSession(
-            token_id=token_id,
+            token_id=hash_token(raw_token),  # only the hash is stored (finding #5)
             user_id=user.id,
             csrf_token=csrf,
             expires_at=expires,
@@ -171,11 +184,13 @@ async def authenticate(
     )
     await session.commit()
     actor = await load_actor(session, user.id)
-    return SessionCreated(token_id=token_id, csrf_token=csrf, expires_at=expires, actor=actor)
+    return SessionCreated(token_id=raw_token, csrf_token=csrf, expires_at=expires, actor=actor)
 
 
-async def resolve_session(session: AsyncSession, token_id: str) -> tuple[Actor, UserSession] | None:
-    us = await session.scalar(select(UserSession).where(UserSession.token_id == token_id))
+async def resolve_session(session: AsyncSession, raw_token: str) -> tuple[Actor, UserSession] | None:
+    us = await session.scalar(
+        select(UserSession).where(UserSession.token_id == hash_token(raw_token))
+    )
     if us is None or us.revoked_at is not None:
         return None
     if us.expires_at <= _now():
@@ -188,8 +203,10 @@ async def resolve_session(session: AsyncSession, token_id: str) -> tuple[Actor, 
     return actor, us
 
 
-async def logout(session: AsyncSession, ctx: Ctx, token_id: str) -> None:
-    us = await session.scalar(select(UserSession).where(UserSession.token_id == token_id))
+async def logout(session: AsyncSession, ctx: Ctx, raw_token: str) -> None:
+    us = await session.scalar(
+        select(UserSession).where(UserSession.token_id == hash_token(raw_token))
+    )
     if us is not None and us.revoked_at is None:
         us.revoked_at = _now()
         await session.commit()
@@ -257,6 +274,7 @@ async def _create_user_row(
     session: AsyncSession, *, username: str, email: str, display_name: str,
     password: str, is_system_admin: bool = False,
 ) -> User:
+    validate_identity(username=username, email=email, display_name=display_name)
     _validate_password(password)
     existing = await session.scalar(
         select(User).where(
@@ -307,6 +325,7 @@ async def create_user(
     is_system_admin: bool = False,
 ) -> User:
     _require_sysadmin(actor)
+    validate_identity(username=username, email=email, display_name=display_name)
     _validate_password(password)
     existing = await session.scalar(
         select(User).where(
@@ -358,13 +377,12 @@ async def update_user(
             .values(revoked_at=_now())
         )
     if display_name is not None:
-        if not display_name.strip():
-            raise ValidationFailed("Display name must not be empty.")
+        if not (DISPLAY_NAME_MIN <= len(display_name.strip()) <= DISPLAY_NAME_MAX):
+            raise ValidationFailed(f"Display name must be {DISPLAY_NAME_MIN}-{DISPLAY_NAME_MAX} characters.")
         user.display_name = display_name.strip()
     if email is not None:
         email = email.strip().lower()
-        if not email:
-            raise ValidationFailed("Email must not be empty.")
+        validate_identity(username=user.username, email=email, display_name=user.display_name)
         clash = await session.scalar(
             select(User).where(func.lower(User.email) == email, User.id != user_id)
         )
@@ -681,6 +699,7 @@ async def change_own_password(
     *,
     current_password: str,
     new_password: str,
+    keep_session_token_hash: str | None = None,
 ) -> None:
     user = await session.get(User, actor.id)
     if user is None:
@@ -692,6 +711,14 @@ async def change_own_password(
         raise ValidationFailed("The new password must be different from the current one.")
     user.password_hash = hash_password(new_password)
     user.must_change_password = False
+    # A password change invalidates every other session (finding #10); the caller's
+    # own session is kept so the user stays signed in.
+    revoke = UserSession.__table__.update().where(
+        UserSession.user_id == user.id, UserSession.revoked_at.is_(None)
+    )
+    if keep_session_token_hash:
+        revoke = revoke.where(UserSession.token_id != keep_session_token_hash)
+    await session.execute(revoke.values(revoked_at=_now()))
     audit.record(
         session, actor=actor, ctx=ctx, entity_type="user",
         action="user.password_changed", entity_id=user.id,

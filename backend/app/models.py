@@ -53,7 +53,8 @@ class User(UUIDMixin, TimestampMixin, Base):
 class UserSession(UUIDMixin, Base):
     __tablename__ = "user_session"
 
-    # id doubles as the opaque cookie value (256-bit token stored as the PK string)
+    # SHA-256 hex of the opaque cookie token. The raw token lives only in the
+    # browser cookie; a DB leak therefore cannot be replayed as a live session.
     token_id: Mapped[str] = mapped_column(String(64), unique=True, nullable=False, index=True)
     user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("app_user.id"), nullable=False, index=True)
     csrf_token: Mapped[str] = mapped_column(String(64), nullable=False)

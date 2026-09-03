@@ -49,6 +49,14 @@ class Forbidden(DomainError):
     status = 403
 
 
+class PasswordChangeRequired(DomainError):
+    """The session is valid but the account must set a new password before it can
+    do anything else. Only /auth/me, /auth/password and logout are permitted."""
+
+    code = "PASSWORD_CHANGE_REQUIRED"
+    status = 403
+
+
 class ResourceNotFound(DomainError):
     code = "RESOURCE_NOT_FOUND"
     status = 404

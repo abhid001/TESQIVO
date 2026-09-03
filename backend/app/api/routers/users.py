@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from fastapi import APIRouter
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, Field
 from sqlalchemy import select
 
 from app.api.deps import CurrentActor, DbSession, RequestCtx
@@ -24,9 +24,9 @@ class UserOut(BaseModel):
 
 
 class CreateUserRequest(BaseModel):
-    username: str = Field(min_length=3, max_length=64)
-    email: EmailStr
-    display_name: str = Field(min_length=1, max_length=200)
+    username: str = Field(min_length=1, max_length=200)
+    email: str = Field(min_length=1, max_length=320)
+    display_name: str = Field(min_length=1, max_length=400)
     password: str = Field(min_length=1, max_length=256)
     is_system_admin: bool = False
 
@@ -37,7 +37,7 @@ class StatusRequest(BaseModel):
 
 class UpdateUserRequest(BaseModel):
     display_name: str | None = None
-    email: EmailStr | None = None
+    email: str | None = Field(default=None, max_length=320)
     password: str | None = Field(default=None, min_length=1, max_length=256)
 
 
