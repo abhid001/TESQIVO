@@ -16,6 +16,11 @@ x-app-env: &app-env
   TESQIVO_PUBLIC_URL: ${TESQIVO_PUBLIC_URL:-http://localhost:8080}
   TESQIVO_SECRET_KEY: ${TESQIVO_SECRET_KEY:-}
   TESQIVO_ENVIRONMENT: production
+  # Optional gate for the browser "create first admin" screen. Unset (the
+  # default) means that screen always rejects every token - use
+  # `docker compose exec web python -m app.cli create-admin` instead, which
+  # needs no token at all.
+  TESQIVO_BOOTSTRAP_TOKEN: ${TESQIVO_BOOTSTRAP_TOKEN:-}
   TESQIVO_SMTP_HOST: ${TESQIVO_SMTP_HOST:-}
   TESQIVO_SMTP_PORT: ${TESQIVO_SMTP_PORT:-587}
   TESQIVO_SMTP_USER: ${TESQIVO_SMTP_USER:-}

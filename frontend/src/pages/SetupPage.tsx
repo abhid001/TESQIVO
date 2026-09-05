@@ -51,9 +51,14 @@ export function SetupPage({ onDone }: { onDone: () => void }) {
         </div>
         <h2 style={{ marginTop: 4 }}>Create the first administrator</h2>
         <p className="muted">
-          Enter the bootstrap token from your <code>.env</code> and choose an admin
-          account. This screen is available only until setup completes.
+          This screen is available only until setup completes. It needs a bootstrap
+          token you've set yourself as <code>TESQIVO_BOOTSTRAP_TOKEN</code> - if you
+          haven't set one, skip this form and run this from a terminal on the host
+          instead (no token needed):
         </p>
+        <pre className="setup-cli-hint">
+          docker compose exec web python -m app.cli create-admin
+        </pre>
         <form onSubmit={submit} className="stack">
           <Field label="Bootstrap token">
             <input value={f.token} onChange={set("token")} />
