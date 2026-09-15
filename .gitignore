@@ -37,3 +37,8 @@ frontend/shots.mjs
 
 # Python build metadata
 *.egg-info/
+
+# Enterprise license signing material - never commit
+*.private.key
+*privkey*
+license.key
