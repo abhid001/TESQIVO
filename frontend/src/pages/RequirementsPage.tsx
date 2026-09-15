@@ -28,12 +28,6 @@ const NEXT_STATUS: Record<string, string[]> = {
   archived: ["draft"],
 };
 const PAGE = 20;
-const COLUMN_KEYS = ["priority", "status", "coverage", "linked", "owner", "updated"] as const;
-type ColumnKey = (typeof COLUMN_KEYS)[number];
-const COLUMN_LABELS: Record<ColumnKey, string> = {
-  priority: "Priority", status: "Status", coverage: "Test Coverage",
-  linked: "Linked Tests", owner: "Owner", updated: "Updated",
-};
 
 function relDate(iso: string): string {
   const d = new Date(iso);
@@ -52,25 +46,6 @@ function coverageTone(pct: number): "" | "mid" | "low" {
 function coveragePct(r: Requirement): number {
   if (!r.linked_test_count) return 0;
   return Math.round((r.qualifying_test_count / r.linked_test_count) * 100);
-}
-
-function useColumns() {
-  const [cols, setCols] = useState<Set<ColumnKey>>(() => {
-    try {
-      const raw = localStorage.getItem("tq.req.columns");
-      return raw ? new Set(JSON.parse(raw)) : new Set(COLUMN_KEYS);
-    } catch {
-      return new Set(COLUMN_KEYS);
-    }
-  });
-  const toggle = (k: ColumnKey) =>
-    setCols((prev) => {
-      const next = new Set(prev);
-      next.has(k) ? next.delete(k) : next.add(k);
-      try { localStorage.setItem("tq.req.columns", JSON.stringify([...next])); } catch { /* ignore */ }
-      return next;
-    });
-  return [cols, toggle] as const;
 }
 
 /* --------------------------------- CSV --------------------------------- */
@@ -162,8 +137,6 @@ export function RequirementsPage() {
   const [coverageFilter, setCoverageFilter] = useState<"" | "covered" | "uncovered" | "changed">("");
   const [showMoreFilters, setShowMoreFilters] = useState(false);
   const [view, setView] = useState<"list" | "grid">("list");
-  const [columns, toggleColumn] = useColumns();
-  const [columnsOpen, setColumnsOpen] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [sort, setSort] = useState<SortState>({ field: "key", dir: "asc" });
   const [page, setPage] = useState(1);
@@ -349,22 +322,6 @@ export function RequirementsPage() {
           {Icons.filter} More filters
         </button>
         <span className="spacer-flex" />
-        {view === "list" && (
-          <div className="columns-menu">
-            <button className="icon-btn" title="Manage columns" aria-label="Manage columns" onClick={() => setColumnsOpen((v) => !v)}>
-              {Icons.settings}
-            </button>
-            {columnsOpen && (
-              <div className="app-menu-panel columns-menu-panel">
-                {COLUMN_KEYS.map((k) => (
-                  <label key={k} className="checkbox columns-menu-item">
-                    <input type="checkbox" checked={columns.has(k)} onChange={() => toggleColumn(k)} /> {COLUMN_LABELS[k]}
-                  </label>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
         <div className="view-toggle">
           <button className={view === "list" ? "active" : ""} onClick={() => setView("list")} aria-label="List view" aria-pressed={view === "list"}>
             {Icons.list}
@@ -376,14 +333,12 @@ export function RequirementsPage() {
       </div>
 
       {showMoreFilters && (
-        <div className="field-row" style={{ marginBottom: 14 }}>
-          <Field label="Type">
-            <select value={reqType} onChange={(e) => { setReqType(e.target.value); setPage(1); }}>
-              <option value="">All types</option>
-              {REQ_TYPES.map((t) => <option key={t} value={t}>{cap(t)}</option>)}
-            </select>
-          </Field>
-          <button className="sm ghost" style={{ alignSelf: "flex-end", marginBottom: 14 }}
+        <div className="req-toolbar" style={{ marginTop: -4 }}>
+          <select className="filter-select" value={reqType} onChange={(e) => { setReqType(e.target.value); setPage(1); }}>
+            <option value="">Type: All</option>
+            {REQ_TYPES.map((t) => <option key={t} value={t}>{cap(t)}</option>)}
+          </select>
+          <button className="sm ghost"
             onClick={() => { setReqType(""); setPriority(""); setStatus(""); setRelease(""); setSearch(""); }}>
             Clear all filters
           </button>
@@ -423,12 +378,12 @@ export function RequirementsPage() {
                   </th>
                   <SortHeader label="ID" field="key" sort={sort} onSort={(s) => { setSort(s); setPage(1); }} className="nowrap" />
                   <SortHeader label="Requirement" field="title" sort={sort} onSort={(s) => { setSort(s); setPage(1); }} />
-                  {columns.has("priority") && <SortHeader label="Priority" field="priority" sort={sort} onSort={(s) => { setSort(s); setPage(1); }} className="nowrap" />}
-                  {columns.has("status") && <SortHeader label="Status" field="status" sort={sort} onSort={(s) => { setSort(s); setPage(1); }} className="nowrap" />}
-                  {columns.has("coverage") && <SortHeader label="Test Coverage" field="coverage" sort={sort} onSort={(s) => { setSort(s); setPage(1); }} />}
-                  {columns.has("linked") && <SortHeader label="Linked Tests" field="linked_test_count" sort={sort} onSort={(s) => { setSort(s); setPage(1); }} className="nowrap" />}
-                  {columns.has("owner") && <SortHeader label="Owner" field="owner_name" sort={sort} onSort={(s) => { setSort(s); setPage(1); }} className="nowrap" />}
-                  {columns.has("updated") && <SortHeader label="Updated" field="updated_at" sort={sort} onSort={(s) => { setSort(s); setPage(1); }} className="nowrap" />}
+                  <SortHeader label="Priority" field="priority" sort={sort} onSort={(s) => { setSort(s); setPage(1); }} className="nowrap" />
+                  <SortHeader label="Status" field="status" sort={sort} onSort={(s) => { setSort(s); setPage(1); }} className="nowrap" />
+                  <SortHeader label="Test Coverage" field="coverage" sort={sort} onSort={(s) => { setSort(s); setPage(1); }} />
+                  <SortHeader label="Linked Tests" field="linked_test_count" sort={sort} onSort={(s) => { setSort(s); setPage(1); }} className="nowrap" />
+                  <SortHeader label="Owner" field="owner_name" sort={sort} onSort={(s) => { setSort(s); setPage(1); }} className="nowrap" />
+                  <SortHeader label="Updated" field="updated_at" sort={sort} onSort={(s) => { setSort(s); setPage(1); }} className="nowrap" />
                   <th className="nowrap">Actions</th>
                 </tr>
               </thead>
@@ -443,23 +398,19 @@ export function RequirementsPage() {
                       {r.title}
                       {r.labels && <div className="muted small">{r.labels}</div>}
                     </td>
-                    {columns.has("priority") && <td className="nowrap"><Badge value={r.priority} /></td>}
-                    {columns.has("status") && <td className="nowrap"><Badge value={r.status} /></td>}
-                    {columns.has("coverage") && (
-                      <td>
-                        <div className="coverage-cell">
-                          <div className="coverage-bar"><span className={`coverage-bar-fill ${coverageTone(coveragePct(r))}`} style={{ width: `${coveragePct(r)}%` }} /></div>
-                          <span className="coverage-pct">{coveragePct(r)}%</span>
-                        </div>
-                      </td>
-                    )}
-                    {columns.has("linked") && <td className="nowrap">{r.linked_test_count}</td>}
-                    {columns.has("owner") && (
-                      <td className="nowrap">
-                        {r.owner_name ? <div className="owner-cell"><Avatar name={r.owner_name} size={22} />{r.owner_name}</div> : <span className="muted">—</span>}
-                      </td>
-                    )}
-                    {columns.has("updated") && <td className="nowrap">{relDate(r.updated_at)}</td>}
+                    <td className="nowrap"><Badge value={r.priority} /></td>
+                    <td className="nowrap"><Badge value={r.status} /></td>
+                    <td>
+                      <div className="coverage-cell">
+                        <div className="coverage-bar"><span className={`coverage-bar-fill ${coverageTone(coveragePct(r))}`} style={{ width: `${coveragePct(r)}%` }} /></div>
+                        <span className="coverage-pct">{coveragePct(r)}%</span>
+                      </div>
+                    </td>
+                    <td className="nowrap">{r.linked_test_count}</td>
+                    <td className="nowrap">
+                      {r.owner_name ? <div className="owner-cell"><Avatar name={r.owner_name} size={22} />{r.owner_name}</div> : <span className="muted">—</span>}
+                    </td>
+                    <td className="nowrap">{relDate(r.updated_at)}</td>
                     <td className="nowrap">
                       <div className="row-actions">
                         <button className="icon-btn" title="Edit" onClick={(e) => { e.stopPropagation(); setEditReq(r); }}>{Icons.edit}</button>
