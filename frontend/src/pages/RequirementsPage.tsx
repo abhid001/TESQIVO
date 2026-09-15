@@ -129,7 +129,7 @@ function parseCsv(text: string): Record<string, string>[] {
 /* ------------------------------ stat card ------------------------------ */
 function StatCard({
   icon, label, value, tone, onClick, active,
-}: { icon: ReactNode; label: string; value: number; tone?: "warn" | "info" | "purple"; onClick?: () => void; active?: boolean }) {
+}: { icon: ReactNode; label: string; value: number; tone?: "ok" | "warn" | "info" | "purple"; onClick?: () => void; active?: boolean }) {
   const Comp = onClick ? "button" : "div";
   return (
     <Comp
@@ -300,7 +300,7 @@ export function RequirementsPage() {
           active={coverageFilter === ""} onClick={() => setCoverageFilter("")}
         />
         <StatCard
-          icon={Icons.checkCircle} label="Covered" value={stats.covered}
+          icon={Icons.checkCircle} label="Covered" tone="ok" value={stats.covered}
           active={coverageFilter === "covered"} onClick={() => setCoverageFilter((v) => (v === "covered" ? "" : "covered"))}
         />
         <StatCard
