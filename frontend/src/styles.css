@@ -884,35 +884,36 @@ ul.plain-list li a { flex: 1; }
 .kpi.tone-info .kpi-icon { background: var(--info-bg); color: var(--info); border-color: color-mix(in srgb, var(--info) 30%, transparent); }
 .kpi.tone-purple .kpi-icon { background: var(--purple-bg); color: var(--purple); border-color: color-mix(in srgb, var(--purple) 30%, transparent); }
 
-/* One line: no scrollbar, no wrap - the controls are sized to actually fit.
-   Only the search box flexes (it has room to spare); everything else is a
-   fixed, compact width. Falls back to wrapping (not scrolling) below 900px,
-   where the sidebar goes overlay and the content column is genuinely narrow. */
-.req-toolbar { display: flex; align-items: center; gap: 8px; flex-wrap: nowrap; margin-bottom: 14px; }
-.req-search { position: relative; flex: 1 1 160px; min-width: 120px; max-width: 220px; }
-.req-search svg { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: var(--text-mute); pointer-events: none; }
-.req-search input { width: 100%; padding: 7px 10px 7px 32px; font-size: 12.5px; }
+/* One line, fixed-width controls, no scrollbar: every control keeps its
+   natural size (nothing shrunk down to fit); the search box is the only one
+   with any give, so it's what absorbs the difference on a slightly tighter
+   window. Falls back to wrapping (not scrolling) below 900px, where the
+   sidebar goes overlay and the content column is genuinely narrow. */
+.req-toolbar { display: flex; align-items: center; gap: 10px; flex-wrap: nowrap; margin-bottom: 14px; }
+.req-search { position: relative; flex: 0 0 260px; }
+.req-search svg { position: absolute; left: 11px; top: 50%; transform: translateY(-50%); color: var(--text-mute); pointer-events: none; }
+.req-search input { width: 100%; padding: 8px 12px 8px 34px; font-size: 13px; }
 .req-chip {
-  display: inline-flex; align-items: center; gap: 6px; padding: 6px 6px 6px 10px;
-  border-radius: var(--radius); font-size: 12px; font-weight: 600;
+  display: inline-flex; align-items: center; gap: 6px; padding: 6px 8px 6px 12px;
+  border-radius: var(--radius); font-size: 12.5px; font-weight: 600;
   background: var(--primary-weak); color: var(--primary); border: 1px solid var(--primary-border);
   white-space: nowrap; flex-shrink: 0;
 }
 .req-chip button { all: unset; cursor: pointer; display: grid; place-items: center; padding: 2px; border-radius: 50%; }
 .req-chip button:hover { background: color-mix(in srgb, var(--primary) 18%, transparent); }
 .filter-select {
-  padding: 6px 24px 6px 10px; font-size: 12px; font-weight: 600; border-radius: var(--radius);
+  padding: 7px 28px 7px 12px; font-size: 12.5px; font-weight: 600; border-radius: var(--radius);
   border: 1px solid var(--border); background: var(--surface); color: var(--text);
   flex-shrink: 0;
 }
 .view-toggle { display: inline-flex; border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; flex-shrink: 0; }
 .view-toggle button {
-  all: unset; cursor: pointer; padding: 6px 8px; display: grid; place-items: center;
+  all: unset; cursor: pointer; padding: 7px 9px; display: grid; place-items: center;
   color: var(--text-dim); background: var(--surface);
 }
 .view-toggle button + button { border-left: 1px solid var(--border); }
 .view-toggle button.active { background: var(--primary-weak); color: var(--primary); }
-.spacer-flex { flex: 1 1 auto; min-width: 4px; }
+.spacer-flex { flex: 1 1 0; min-width: 0; }
 .req-toolbar > .sm { flex-shrink: 0; }
 
 .columns-menu { position: relative; flex-shrink: 0; }
@@ -1004,12 +1005,15 @@ ul.plain-list li a { flex: 1; }
   .dash-grid.r4, .dash-grid.r3 { grid-template-columns: 1fr 1fr; }
   .dash-grid.g-2-1, .dash-grid.g-2col { grid-template-columns: 1fr; }
   .dash-grid.r4 > .card, .dash-grid.r3 > .card { min-height: 0; }
+  /* The toolbar's controls are fixed-width by design (not shrunk to fit) - past
+     this point there isn't room for all of them on one line, so wrap instead
+     of letting them run past the edge. */
+  .req-toolbar { flex-wrap: wrap; row-gap: 8px; }
 }
 @media (max-width: 900px) {
   .app { grid-template-columns: 1fr; }
   .drawer { width: 100vw; }
-  .req-toolbar { flex-wrap: wrap; }
-  .req-search { max-width: none; }
+  .req-search { flex-basis: 100%; }
   .sidebar {
     position: fixed; z-index: 40; left: 0; top: 0; width: 240px;
     transform: translateX(-100%); transition: transform .2s ease;
