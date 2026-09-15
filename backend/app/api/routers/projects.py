@@ -135,6 +135,7 @@ async def delete_project(project_id: str, actor: CurrentActor, db: DbSession, ct
 class MembershipOut(BaseModel):
     user_id: str
     username: str
+    display_name: str
     role: str
     status: str
 
@@ -151,7 +152,10 @@ async def list_members(project_id: str, actor: CurrentActor, db: DbSession) -> l
         )
     ).all()
     return [
-        MembershipOut(user_id=str(m.user_id), username=u.username, role=m.role, status=m.status)
+        MembershipOut(
+            user_id=str(m.user_id), username=u.username, display_name=u.display_name,
+            role=m.role, status=m.status,
+        )
         for (m, u) in rows
     ]
 
@@ -166,7 +170,10 @@ async def add_member(
         new_user=body.new_user.model_dump() if body.new_user else None,
     )
     u = await db.get(User, m.user_id)
-    return MembershipOut(user_id=str(m.user_id), username=u.username if u else "", role=m.role, status=m.status)
+    return MembershipOut(
+        user_id=str(m.user_id), username=u.username if u else "", display_name=u.display_name if u else "",
+        role=m.role, status=m.status,
+    )
 
 
 @router.delete("/{project_id}/members/{user_id}", status_code=204)
