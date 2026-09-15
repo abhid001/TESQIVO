@@ -925,6 +925,7 @@ ul.plain-list li a { flex: 1; }
 .columns-menu { position: relative; flex-shrink: 0; }
 .columns-menu button.icon-btn {
   border: 1px solid var(--border); border-radius: var(--radius); padding: 7px 9px;
+  overflow: visible;
 }
 .columns-menu-panel { position: absolute; right: 0; top: calc(100% + 6px); z-index: 20; padding: 8px; min-width: 180px; }
 .columns-menu-item { display: flex; align-items: center; gap: 6px; padding: 6px 6px; font-weight: 500; text-transform: none; white-space: nowrap; }
