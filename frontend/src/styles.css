@@ -890,7 +890,7 @@ ul.plain-list li a { flex: 1; }
    window. Falls back to wrapping (not scrolling) below 900px, where the
    sidebar goes overlay and the content column is genuinely narrow. */
 .req-toolbar { display: flex; align-items: center; gap: 10px; flex-wrap: nowrap; margin-bottom: 14px; }
-.req-search { position: relative; flex: 0 0 260px; }
+.req-search { position: relative; flex: 0 1 260px; min-width: 190px; }
 .req-search svg { position: absolute; left: 11px; top: 50%; transform: translateY(-50%); color: var(--text-mute); pointer-events: none; }
 .req-search input { width: 100%; padding: 8px 12px 8px 34px; font-size: 13px; }
 .req-chip {
@@ -902,6 +902,12 @@ ul.plain-list li a { flex: 1; }
 .req-chip button { all: unset; cursor: pointer; display: grid; place-items: center; padding: 2px; border-radius: 50%; }
 .req-chip button:hover { background: color-mix(in srgb, var(--primary) 18%, transparent); }
 .filter-select {
+  /* The global `select { width: 100% }` rule (styles.css ~L612) otherwise wins
+     here: as a flex item with no flex-basis override, width:100% becomes its
+     hypothetical main size, so it fights every sibling select for the whole
+     row instead of sizing to its own content. That, not the padding/font
+     size, was the actual cause of the toolbar overflowing. */
+  width: auto; max-width: none;
   padding: 7px 28px 7px 12px; font-size: 12.5px; font-weight: 600; border-radius: var(--radius);
   border: 1px solid var(--border); background: var(--surface); color: var(--text);
   flex-shrink: 0;
@@ -999,16 +1005,19 @@ ul.plain-list li a { flex: 1; }
 .drawer-link-row:last-child { border-bottom: none; }
 
 /* ============================ responsive ============================ */
+/* Measured (real browser, not guessed): with the search box shrunk to its
+   190px floor, the rest of the toolbar's fixed-width controls stop fitting
+   below ~1250px of viewport width. Above that, search alone absorbs the
+   difference and the row stays on one line. */
+@media (max-width: 1250px) {
+  .req-toolbar { flex-wrap: wrap; row-gap: 8px; }
+}
 @media (max-width: 1180px) {
   .kpi-grid, .kpi-grid-4 { grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); }
   .dash-grid.g-2-1-1, .dash-grid.g-1-1-1, .dash-grid.g-trace,
   .dash-grid.r4, .dash-grid.r3 { grid-template-columns: 1fr 1fr; }
   .dash-grid.g-2-1, .dash-grid.g-2col { grid-template-columns: 1fr; }
   .dash-grid.r4 > .card, .dash-grid.r3 > .card { min-height: 0; }
-  /* The toolbar's controls are fixed-width by design (not shrunk to fit) - past
-     this point there isn't room for all of them on one line, so wrap instead
-     of letting them run past the edge. */
-  .req-toolbar { flex-wrap: wrap; row-gap: 8px; }
 }
 @media (max-width: 900px) {
   .app { grid-template-columns: 1fr; }
