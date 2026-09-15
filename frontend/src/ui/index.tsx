@@ -2,7 +2,6 @@ import {
   createContext,
   useCallback,
   useContext,
-  useEffect,
   useRef,
   useState,
   type CSSProperties,
@@ -36,6 +35,13 @@ export function Card({
 
 export function Badge({ value }: { value: string }) {
   return <span className={`badge ${value}`}>{value.replaceAll("_", " ")}</span>;
+}
+
+/** "in_review" -> "In review" - used for <option> labels drawn from enum values
+ *  (priority, status, type, ...), so dropdown lists read as proper words. */
+export function cap(value: string): string {
+  const s = value.replaceAll("_", " ");
+  return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
 export function EmptyState({ children }: { children: ReactNode }) {
@@ -74,20 +80,11 @@ export function Dialog({
   onClose: () => void;
   children: ReactNode;
 }) {
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
+  // Forms/dialogs close only via the close button (or a Cancel button inside
+  // them) - clicking the dimmed backdrop must not dismiss unsaved work.
   return (
-    <div className="dialog-backdrop" onClick={onClose}>
-      <div
-        className="dialog"
-        role="dialog"
-        aria-modal="true"
-        aria-label={title}
-        onClick={(e) => e.stopPropagation()}
-      >
+    <div className="dialog-backdrop">
+      <div className="dialog" role="dialog" aria-modal="true" aria-label={title}>
         <div className="dialog-head">
           <h2>{title}</h2>
           <button className="ghost sm" onClick={onClose} aria-label="Close">
@@ -97,6 +94,74 @@ export function Dialog({
         <div className="dialog-body">{children}</div>
       </div>
     </div>
+  );
+}
+
+/** Right-side sliding panel for an entity's details (Requirements, and other
+ *  sections as they adopt the same "click a key -> inspect on the right"
+ *  pattern). Like Dialog, it closes only via the close button. */
+export function Drawer({
+  title,
+  subtitle,
+  onClose,
+  tabs,
+  activeTab,
+  onTab,
+  children,
+}: {
+  title: ReactNode;
+  subtitle?: ReactNode;
+  onClose: () => void;
+  tabs?: string[];
+  activeTab?: string;
+  onTab?: (t: string) => void;
+  children: ReactNode;
+}) {
+  return (
+    <div className="drawer-backdrop">
+      <aside className="drawer" role="dialog" aria-modal="true" aria-label={typeof title === "string" ? title : "Details"}>
+        <div className="drawer-head">
+          <div className="drawer-head-text">
+            <h3>{title}</h3>
+            {subtitle && <div className="muted small">{subtitle}</div>}
+          </div>
+          <button className="ghost sm" onClick={onClose} aria-label="Close">
+            ✕
+          </button>
+        </div>
+        {tabs && (
+          <div className="drawer-tabs" role="tablist">
+            {tabs.map((t) => (
+              <button
+                key={t}
+                role="tab"
+                aria-selected={activeTab === t}
+                className={`drawer-tab ${activeTab === t ? "active" : ""}`}
+                onClick={() => onTab?.(t)}
+              >
+                {t}
+              </button>
+            ))}
+          </div>
+        )}
+        <div className="drawer-body">{children}</div>
+      </aside>
+    </div>
+  );
+}
+
+/** Small circular initials badge for a person - "Aarav Desai" -> "AD". */
+export function Avatar({ name, size = 26 }: { name: string | null | undefined; size?: number }) {
+  const initials = (name ?? "?")
+    .trim()
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((p) => p[0]?.toUpperCase())
+    .join("") || "?";
+  return (
+    <span className="avatar" style={{ width: size, height: size, fontSize: size * 0.42 }} title={name ?? undefined}>
+      {initials}
+    </span>
   );
 }
 

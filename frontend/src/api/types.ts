@@ -103,6 +103,7 @@ export interface InstanceUser {
 export interface Member {
   user_id: string;
   username: string;
+  display_name: string;
   role: string;
   status: string;
 }
@@ -260,6 +261,12 @@ export interface ReportSummary {
   metrics: Metric[];
 }
 
+export interface RequirementTraceSummary {
+  test_cases: number;
+  executions: number;
+  defects: number;
+}
+
 export interface Requirement {
   id: string;
   key: string;
@@ -276,7 +283,14 @@ export interface Requirement {
   source_type: string;
   external_reference: string | null;
   release_id: string | null;
+  release_key: string | null;
+  release_name: string | null;
   version: number;
+  created_at: string;
+  updated_at: string;
+  linked_test_count: number;
+  qualifying_test_count: number;
+  trace_summary?: RequirementTraceSummary;
 }
 
 export interface Release {
@@ -338,6 +352,17 @@ export interface Defect {
   priority: string;
   release_id: string | null;
   version: number;
+}
+
+export interface TraceLink {
+  id: string;
+  source_type: string;
+  source_id: string;
+  target_type: string;
+  target_id: string;
+  relationship_type: string;
+  origin: string;
+  removed: boolean;
 }
 
 export interface MatrixRow {

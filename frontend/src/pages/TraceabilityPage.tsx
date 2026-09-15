@@ -1,6 +1,6 @@
-import { Link, useParams } from "react-router-dom";
+import { Link, useParams, useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { http } from "../api/client";
 import { useProject } from "../api/hooks";
 import type { Cycle, MatrixRow } from "../api/types";
@@ -11,6 +11,8 @@ export function TraceabilityPage() {
   const { project } = useProject(projectKey);
   const pid = project?.id;
   const [cycleId, setCycleId] = useState("");
+  const [params] = useSearchParams();
+  const focusKey = params.get("req");
 
   const cycles = useQuery({
     queryKey: ["cycles", pid],
@@ -25,6 +27,11 @@ export function TraceabilityPage() {
       ),
     enabled: !!pid,
   });
+
+  useEffect(() => {
+    if (!focusKey || !matrix.data) return;
+    document.getElementById(`req-row-${focusKey}`)?.scrollIntoView({ block: "center", behavior: "smooth" });
+  }, [focusKey, matrix.data]);
 
   if (!project) return <p>Loading…</p>;
 
@@ -59,7 +66,7 @@ export function TraceabilityPage() {
             </thead>
             <tbody>
               {matrix.data.rows.map((r) => (
-                <tr key={r.requirement_key}>
+                <tr key={r.requirement_key} id={`req-row-${r.requirement_key}`} className={r.requirement_key === focusKey ? "selected-row" : ""}>
                   <td className="key">
                     <Link to={`/p/${projectKey}/requirements?req=${encodeURIComponent(r.requirement_key)}`}>
                       {r.requirement_key}

@@ -31,6 +31,7 @@ import { CyclesPage } from "./pages/CyclesPage";
 import { CycleRunnerPage } from "./pages/CycleRunnerPage";
 import { TraceabilityPage } from "./pages/TraceabilityPage";
 import { BacklogPage } from "./pages/BacklogPage";
+import { RequirementsPage } from "./pages/RequirementsPage";
 import { ReleasesPage } from "./pages/ReleasesPage";
 import { ReportsPage } from "./pages/ReportsPage";
 
@@ -144,8 +145,8 @@ function Shell() {
             <Route path="cycles/:cycleId/run" element={<CycleRunnerPage />} />
             <Route path="releases" element={<ReleasesPage />} />
             <Route path="traceability" element={<TraceabilityPage />} />
-            <Route path="requirements" element={<BacklogPage view="requirements" />} />
-            <Route path="defects" element={<BacklogPage view="defects" />} />
+            <Route path="requirements" element={<RequirementsPage />} />
+            <Route path="defects" element={<BacklogPage />} />
             <Route path="reports" element={<ReportsPage />} />
             <Route path="backlog" element={<Navigate to="../requirements" replace />} />
             <Route path="settings" element={<ProjectSettingsPage />} />
