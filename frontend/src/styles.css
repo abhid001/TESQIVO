@@ -884,33 +884,45 @@ ul.plain-list li a { flex: 1; }
 .kpi.tone-info .kpi-icon { background: var(--info-bg); color: var(--info); border-color: color-mix(in srgb, var(--info) 30%, transparent); }
 .kpi.tone-purple .kpi-icon { background: var(--purple-bg); color: var(--purple); border-color: color-mix(in srgb, var(--purple) 30%, transparent); }
 
-.req-toolbar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; }
-.req-search { position: relative; flex: 1 1 260px; max-width: 340px; }
+/* One line always: the toolbar itself never wraps its items to a second row -
+   past ~1050px of content it scrolls sideways instead (rather than each
+   control wrapping and every filter landing on its own line). */
+.req-toolbar { display: flex; align-items: center; gap: 10px; flex-wrap: nowrap; overflow-x: auto; padding-bottom: 2px; margin-bottom: 14px; }
+.req-search { position: relative; flex: 1 1 200px; min-width: 160px; max-width: 320px; flex-shrink: 1; }
 .req-search svg { position: absolute; left: 11px; top: 50%; transform: translateY(-50%); color: var(--text-mute); pointer-events: none; }
 .req-search input { width: 100%; padding: 8px 12px 8px 34px; font-size: 13px; }
-.filter-chip {
+.req-chip {
   display: inline-flex; align-items: center; gap: 6px; padding: 6px 8px 6px 12px;
   border-radius: var(--radius); font-size: 12.5px; font-weight: 600;
   background: var(--primary-weak); color: var(--primary); border: 1px solid var(--primary-border);
-  white-space: nowrap;
+  white-space: nowrap; flex-shrink: 0;
 }
-.filter-chip button { all: unset; cursor: pointer; display: grid; place-items: center; padding: 2px; border-radius: 50%; }
-.filter-chip button:hover { background: color-mix(in srgb, var(--primary) 18%, transparent); }
+.req-chip button { all: unset; cursor: pointer; display: grid; place-items: center; padding: 2px; border-radius: 50%; }
+.req-chip button:hover { background: color-mix(in srgb, var(--primary) 18%, transparent); }
 .filter-select {
   padding: 7px 30px 7px 12px; font-size: 12.5px; font-weight: 600; border-radius: var(--radius);
   border: 1px solid var(--border); background: var(--surface); color: var(--text);
+  flex-shrink: 0;
 }
-.view-toggle { display: inline-flex; border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+.view-toggle { display: inline-flex; border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; flex-shrink: 0; }
 .view-toggle button {
   all: unset; cursor: pointer; padding: 7px 9px; display: grid; place-items: center;
   color: var(--text-dim); background: var(--surface);
 }
 .view-toggle button + button { border-left: 1px solid var(--border); }
 .view-toggle button.active { background: var(--primary-weak); color: var(--primary); }
-.spacer-flex { flex: 1 1 auto; }
+.spacer-flex { flex: 1 1 auto; min-width: 8px; }
+.req-toolbar > .sm { flex-shrink: 0; }
 
-td.req-title strong.key-link, span.key-link {
-  color: var(--primary); font-family: var(--mono); font-weight: 600; cursor: pointer; background: none; border: none; padding: 0;
+.columns-menu { position: relative; flex-shrink: 0; }
+.columns-menu-panel { position: absolute; right: 0; top: calc(100% + 6px); z-index: 20; padding: 8px; min-width: 180px; }
+.columns-menu-item { display: flex; align-items: center; gap: 6px; padding: 6px 6px; font-weight: 500; text-transform: none; white-space: nowrap; }
+
+.row-actions { display: flex; align-items: center; gap: 6px; flex-wrap: nowrap; }
+
+.key-link {
+  color: var(--primary); font-family: var(--mono); font-weight: 600; font-size: inherit;
+  cursor: pointer; background: none; border: none; padding: 0;
 }
 .key-link:hover { text-decoration: underline; }
 .row-clickable { cursor: pointer; }
@@ -923,11 +935,6 @@ td.req-title strong.key-link, span.key-link {
 .coverage-bar-fill.mid { background: var(--warning-solid); }
 .coverage-pct { font-size: 12px; font-weight: 700; font-variant-numeric: tabular-nums; min-width: 32px; text-align: right; }
 
-.avatar {
-  display: inline-grid; place-items: center; border-radius: 50%; flex: 0 0 auto;
-  background: var(--primary-weak); color: var(--primary); font-weight: 700;
-  border: 1px solid var(--primary-border);
-}
 .owner-cell { display: flex; align-items: center; gap: 8px; }
 
 .checkbox-cell { width: 34px; }

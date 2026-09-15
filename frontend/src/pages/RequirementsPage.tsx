@@ -319,7 +319,7 @@ export function RequirementsPage() {
           <input placeholder="Search requirements…" value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }} />
         </div>
         {releaseChip && (
-          <span className="filter-chip">
+          <span className="req-chip">
             Release: {releaseChip.key}
             <button onClick={() => setRelease("")} aria-label="Clear release filter">✕</button>
           </span>
@@ -335,7 +335,7 @@ export function RequirementsPage() {
           {PRIORITIES.map((p) => <option key={p} value={p}>{cap(p)}</option>)}
         </select>
         {status ? (
-          <span className="filter-chip">
+          <span className="req-chip">
             Status: {cap(status)}
             <button onClick={() => setStatus("")} aria-label="Clear status filter">✕</button>
           </span>
@@ -349,6 +349,22 @@ export function RequirementsPage() {
           {Icons.filter} More filters
         </button>
         <span className="spacer-flex" />
+        {view === "list" && (
+          <div className="columns-menu">
+            <button className="icon-btn" title="Manage columns" aria-label="Manage columns" onClick={() => setColumnsOpen((v) => !v)}>
+              {Icons.settings}
+            </button>
+            {columnsOpen && (
+              <div className="app-menu-panel columns-menu-panel">
+                {COLUMN_KEYS.map((k) => (
+                  <label key={k} className="checkbox columns-menu-item">
+                    <input type="checkbox" checked={columns.has(k)} onChange={() => toggleColumn(k)} /> {COLUMN_LABELS[k]}
+                  </label>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
         <div className="view-toggle">
           <button className={view === "list" ? "active" : ""} onClick={() => setView("list")} aria-label="List view" aria-pressed={view === "list"}>
             {Icons.list}
@@ -413,18 +429,7 @@ export function RequirementsPage() {
                   {columns.has("linked") && <SortHeader label="Linked Tests" field="linked_test_count" sort={sort} onSort={(s) => { setSort(s); setPage(1); }} className="nowrap" />}
                   {columns.has("owner") && <SortHeader label="Owner" field="owner_name" sort={sort} onSort={(s) => { setSort(s); setPage(1); }} className="nowrap" />}
                   {columns.has("updated") && <SortHeader label="Updated" field="updated_at" sort={sort} onSort={(s) => { setSort(s); setPage(1); }} className="nowrap" />}
-                  <th className="nowrap" style={{ position: "relative" }}>
-                    <button className="icon-btn" title="Manage columns" onClick={() => setColumnsOpen((v) => !v)}>{Icons.settings}</button>
-                    {columnsOpen && (
-                      <div className="app-menu-panel" style={{ position: "absolute", right: 0, top: "100%", zIndex: 10, padding: 10, minWidth: 180 }}>
-                        {COLUMN_KEYS.map((k) => (
-                          <label key={k} className="checkbox" style={{ display: "flex", padding: "5px 4px", fontWeight: 500, textTransform: "none" }}>
-                            <input type="checkbox" checked={columns.has(k)} onChange={() => toggleColumn(k)} /> {COLUMN_LABELS[k]}
-                          </label>
-                        ))}
-                      </div>
-                    )}
-                  </th>
+                  <th className="nowrap">Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -456,9 +461,9 @@ export function RequirementsPage() {
                     )}
                     {columns.has("updated") && <td className="nowrap">{relDate(r.updated_at)}</td>}
                     <td className="nowrap">
-                      <div className="inline-actions">
-                        <button className="icon-btn" title="Edit" onClick={() => setEditReq(r)}>{Icons.edit}</button>
-                        <button className="icon-btn warn" title="Delete" onClick={() => { setEditReq(r); setDialog("delete"); }}>{Icons.trash}</button>
+                      <div className="row-actions">
+                        <button className="icon-btn" title="Edit" onClick={(e) => { e.stopPropagation(); setEditReq(r); }}>{Icons.edit}</button>
+                        <button className="icon-btn warn" title="Delete" onClick={(e) => { e.stopPropagation(); setEditReq(r); setDialog("delete"); }}>{Icons.trash}</button>
                       </div>
                     </td>
                   </tr>
