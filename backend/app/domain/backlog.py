@@ -197,6 +197,91 @@ async def delete_requirement(
     await session.commit()
 
 
+_QUALIFYING_TC_STATES = ("approved", "active")
+
+
+async def requirement_test_stats(
+    session: AsyncSession, project_id: uuid.UUID, req_ids: list[uuid.UUID]
+) -> dict[uuid.UUID, dict[str, int]]:
+    """Bulk per-requirement test-case counts for the Requirements list: how many
+    test cases are linked, and how many of those are 'qualifying' (approved/active
+    - the same bar M-05/M-08 already use on the Dashboard). Used for the "Linked
+    Tests" column and the "Test Coverage" bar (qualifying / linked)."""
+    if not req_ids:
+        return {}
+    from sqlalchemy import case
+
+    from app.models import TestCase
+
+    rows = (
+        await session.execute(
+            select(
+                TraceLink.source_id,
+                func.count(TestCase.id),
+                func.sum(case((TestCase.lifecycle_state.in_(_QUALIFYING_TC_STATES), 1), else_=0)),
+            )
+            .join(TestCase, TestCase.id == TraceLink.target_id)
+            .where(
+                TraceLink.project_id == project_id,
+                TraceLink.source_type == "requirement",
+                TraceLink.source_id.in_(req_ids),
+                TraceLink.target_type == "test_case",
+                TraceLink.removed_at.is_(None),
+            )
+            .group_by(TraceLink.source_id)
+        )
+    ).all()
+    return {
+        req_id: {"linked_test_count": int(total), "qualifying_test_count": int(qualifying or 0)}
+        for (req_id, total, qualifying) in rows
+    }
+
+
+async def requirement_trace_summary(
+    session: AsyncSession, project_id: uuid.UUID, requirement_id: uuid.UUID
+) -> dict[str, int]:
+    """Test cases / executions / defects linked (directly or transitively) to one
+    requirement - the "Trace Summary" shown on the requirement detail panel."""
+    from app.models import CycleTest, ExecutionAttempt
+
+    tc_ids = list(
+        await session.scalars(
+            select(TraceLink.target_id).where(
+                TraceLink.project_id == project_id,
+                TraceLink.source_type == "requirement",
+                TraceLink.source_id == requirement_id,
+                TraceLink.target_type == "test_case",
+                TraceLink.removed_at.is_(None),
+            )
+        )
+    )
+    executions = 0
+    if tc_ids:
+        executions = (
+            await session.scalar(
+                select(func.count(ExecutionAttempt.id))
+                .join(CycleTest, CycleTest.id == ExecutionAttempt.cycle_test_id)
+                .where(CycleTest.test_case_id.in_(tc_ids))
+            )
+            or 0
+        )
+    # The legal direction is defect -> requirement ("regresses"), not the other
+    # way around - see traceability.LEGAL_RELATIONSHIPS.
+    defects = (
+        await session.scalar(
+            select(func.count()).select_from(TraceLink).where(
+                TraceLink.project_id == project_id,
+                TraceLink.source_type == "defect",
+                TraceLink.target_type == "requirement",
+                TraceLink.target_id == requirement_id,
+                TraceLink.removed_at.is_(None),
+            )
+        )
+        or 0
+    )
+    return {"test_cases": len(tc_ids), "executions": int(executions), "defects": int(defects)}
+
+
 async def transition_requirement(
     session: AsyncSession, actor: Actor, ctx: Ctx, *, requirement_id: uuid.UUID,
     to_status: str, expected_version: int,

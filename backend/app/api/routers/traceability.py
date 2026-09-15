@@ -94,8 +94,15 @@ class CreateLink(BaseModel):
     external_reference: str | None = None
 
 
-def _req_out(r: Requirement, owner_name: str | None = None) -> dict:
-    return {
+def _req_out(
+    r: Requirement,
+    owner_name: str | None = None,
+    release: tuple[str, str] | None = None,
+    stats: dict[str, int] | None = None,
+    trace_summary: dict[str, int] | None = None,
+) -> dict:
+    stats = stats or {"linked_test_count": 0, "qualifying_test_count": 0}
+    out = {
         "id": str(r.id), "key": r.key, "title": r.title,
         "description": r.description, "acceptance_criteria": r.acceptance_criteria,
         "status": r.status, "priority": r.priority, "req_type": r.req_type,
@@ -103,8 +110,17 @@ def _req_out(r: Requirement, owner_name: str | None = None) -> dict:
         "owner_id": str(r.owner_id) if r.owner_id else None, "owner_name": owner_name,
         "source_type": r.source_type, "external_reference": r.external_reference,
         "release_id": str(r.release_id) if r.release_id else None,
+        "release_key": release[0] if release else None,
+        "release_name": release[1] if release else None,
         "version": r.version,
+        "created_at": r.created_at.isoformat(),
+        "updated_at": r.updated_at.isoformat(),
+        "linked_test_count": stats["linked_test_count"],
+        "qualifying_test_count": stats["qualifying_test_count"],
     }
+    if trace_summary is not None:
+        out["trace_summary"] = trace_summary
+    return out
 
 
 def _rel_out(r: Release) -> dict:
@@ -129,6 +145,23 @@ async def _owner_names(db, rows: list) -> dict:
     return {u.id: u.display_name for u in users}
 
 
+async def _release_info(db, rows: list) -> dict:
+    ids = {r.release_id for r in rows if r.release_id}
+    if not ids:
+        return {}
+    releases = (await db.scalars(select(Release).where(Release.id.in_(ids)))).all()
+    return {rel.id: (rel.key, rel.name) for rel in releases}
+
+
+async def _fresh(db, r):
+    """created_at/updated_at are server_default=func.now() - never set client-side,
+    so after the domain layer's session.commit() they're unloaded and a bare
+    attribute access tries a lazy DB round-trip outside an awaited context
+    (MissingGreenlet). Refresh explicitly, the awaited way, before reading them."""
+    await db.refresh(r)
+    return r
+
+
 @router.post("/projects/{project_id}/requirements", status_code=201)
 async def create_requirement(project_id: str, body: CreateRequirement, actor: CurrentActor, db: DbSession, ctx: RequestCtx) -> dict:
     r = await backlog.create_requirement(
@@ -140,8 +173,10 @@ async def create_requirement(project_id: str, body: CreateRequirement, actor: Cu
         source_type=body.source_type, external_reference=body.external_reference,
         release_id=uuid.UUID(body.release_id) if body.release_id else None,
     )
+    r = await _fresh(db, r)
     names = await _owner_names(db, [r])
-    return _req_out(r, names.get(r.owner_id))
+    releases = await _release_info(db, [r])
+    return _req_out(r, names.get(r.owner_id), releases.get(r.release_id))
 
 
 def _page(items: list, page: int, page_size: int, total: int) -> dict:
@@ -159,7 +194,15 @@ async def list_requirements(project_id: str, actor: CurrentActor, db: DbSession,
     authz.require_member(actor, pid)
     rows, total = await backlog.list_entities(db, Requirement, pid, page, page_size, sort=sort)
     names = await _owner_names(db, rows)
-    return _page([_req_out(r, names.get(r.owner_id)) for r in rows], page, page_size, total)
+    releases = await _release_info(db, rows)
+    stats = await backlog.requirement_test_stats(db, pid, [r.id for r in rows])
+    return _page(
+        [
+            _req_out(r, names.get(r.owner_id), releases.get(r.release_id), stats.get(r.id))
+            for r in rows
+        ],
+        page, page_size, total,
+    )
 
 
 @router.get("/requirements/{req_id}")
@@ -171,7 +214,10 @@ async def get_requirement(req_id: str, actor: CurrentActor, db: DbSession) -> di
         raise ResourceNotFound("Requirement not found.")
     authz.require_member(actor, r.project_id)
     names = await _owner_names(db, [r])
-    return _req_out(r, names.get(r.owner_id))
+    releases = await _release_info(db, [r])
+    stats = await backlog.requirement_test_stats(db, r.project_id, [r.id])
+    summary = await backlog.requirement_trace_summary(db, r.project_id, r.id)
+    return _req_out(r, names.get(r.owner_id), releases.get(r.release_id), stats.get(r.id), summary)
 
 
 @router.get("/requirements/{req_id}/history")
@@ -190,7 +236,10 @@ async def transition_requirement(req_id: str, body: Transition, actor: CurrentAc
     r = await backlog.transition_requirement(
         db, actor, ctx, requirement_id=uuid.UUID(req_id), to_status=body.to, expected_version=body.expected_version
     )
-    return _req_out(r)
+    r = await _fresh(db, r)
+    names = await _owner_names(db, [r])
+    releases = await _release_info(db, [r])
+    return _req_out(r, names.get(r.owner_id), releases.get(r.release_id))
 
 
 @router.patch("/requirements/{req_id}")
@@ -211,8 +260,10 @@ async def update_requirement(req_id: str, body: UpdateRequirement, actor: Curren
         source_type=body.source_type, external_reference=body.external_reference,
         release_id=release,
     )
+    r = await _fresh(db, r)
     names = await _owner_names(db, [r])
-    return _req_out(r, names.get(r.owner_id))
+    releases = await _release_info(db, [r])
+    return _req_out(r, names.get(r.owner_id), releases.get(r.release_id))
 
 
 @router.delete("/requirements/{req_id}", status_code=204)
