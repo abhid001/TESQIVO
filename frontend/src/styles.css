@@ -366,9 +366,9 @@ code, .key { font-family: var(--mono); font-size: 0.92em; }
   border: 1.5px solid color-mix(in srgb, var(--primary) 24%, transparent);
 }
 .kpi-icon svg { width: 30px; height: 30px; }
-.kpi-label { font-size: 12.5px; color: var(--text-dim); font-weight: 600; line-height: 1.2; }
-.kpi-value { font-size: 32px; font-weight: 750; letter-spacing: -0.025em; line-height: 1.05; }
-.kpi-sub { font-size: 12px; color: var(--text-dim); font-variant-numeric: tabular-nums; }
+.kpi-label { font-size: 12.5px; color: var(--text-dim); font-weight: 600; line-height: 1.2; overflow-wrap: break-word; }
+.kpi-value { font-size: clamp(22px, 2.4vw, 32px); font-weight: 750; letter-spacing: -0.025em; line-height: 1.05; overflow-wrap: break-word; }
+.kpi-sub { font-size: 12px; color: var(--text-dim); font-variant-numeric: tabular-nums; overflow-wrap: break-word; }
 .kpi-delta { font-size: 12px; font-weight: 700; display: inline-flex; align-items: center; gap: 3px; }
 .kpi-delta.up { color: var(--success); }
 .kpi-delta.down { color: var(--danger); }
@@ -499,9 +499,10 @@ code, .key { font-family: var(--mono); font-size: 0.92em; }
 
 /* named horizontal bars (coverage / severity) */
 .hbars { display: flex; flex-direction: column; gap: 12px; }
-.hbar-row { display: grid; grid-template-columns: 68px 1fr auto; gap: 12px; align-items: center; font-size: 13px; }
-button.hbar-row { all: unset; box-sizing: border-box; cursor: pointer; display: grid; grid-template-columns: 68px 1fr auto; gap: 12px; align-items: center; width: 100%; }
+.hbar-row { display: grid; grid-template-columns: minmax(0, 68px) minmax(0, 1fr) auto; gap: 12px; align-items: center; font-size: 13px; }
+button.hbar-row { all: unset; box-sizing: border-box; cursor: pointer; display: grid; grid-template-columns: minmax(0, 68px) minmax(0, 1fr) auto; gap: 12px; align-items: center; width: 100%; }
 button.hbar-row:hover .hbar-track { outline: 2px solid var(--primary-weak); }
+.hbar-row > .muted { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .hbar-track { height: 9px; border-radius: 999px; background: var(--surface-3); overflow: hidden; }
 .hbar-fill { height: 100%; border-radius: 999px; min-width: 3px; transition: width .4s ease; }
 .hbar-val { font-weight: 700; font-variant-numeric: tabular-nums; min-width: 34px; text-align: right; }
@@ -977,6 +978,10 @@ ul.plain-list li a { flex: 1; }
 .drawer-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; padding: 16px 18px; border-bottom: 1px solid var(--border); }
 .drawer-head-text h3 { font-size: 15.5px; font-family: var(--mono); color: var(--primary); }
 .drawer-head-text .muted { margin-top: 2px; font-family: var(--font); }
+.drawer-head-actions { display: flex; align-items: center; gap: 4px; flex: 0 0 auto; }
+.trace-tile.clickable { cursor: pointer; }
+.trace-tile.clickable:hover { background: var(--surface-3); }
+.trace-tile.disabled { opacity: 0.55; cursor: default; }
 .drawer-tabs { display: flex; gap: 4px; padding: 0 14px; border-bottom: 1px solid var(--border); }
 .drawer-tab {
   all: unset; cursor: pointer; padding: 10px 10px; font-size: 13px; font-weight: 600;
@@ -992,7 +997,9 @@ ul.plain-list li a { flex: 1; }
 .drawer-kv:last-child { border-bottom: none; }
 .trace-tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
 .trace-tile {
+  all: unset; box-sizing: border-box; display: block; width: 100%;
   background: var(--surface-2); border-radius: var(--radius); padding: 12px 10px; text-align: center;
+  font: inherit; color: inherit; transition: background .12s;
 }
 .trace-tile .trace-tile-icon { display: inline-grid; place-items: center; width: 34px; height: 34px; border-radius: 50%; margin-bottom: 6px; }
 .trace-tile .trace-tile-value { font-size: 19px; font-weight: 750; }

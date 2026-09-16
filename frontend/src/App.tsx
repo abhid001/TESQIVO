@@ -7,7 +7,7 @@ import {
   useNavigate,
   useParams,
 } from "react-router-dom";
-import { useAuth, useRole, canManageProject } from "./auth/AuthContext";
+import { useAuth, useRole, canManageProject, canAuthor } from "./auth/AuthContext";
 import { http } from "./api/client";
 import { useProject, useProjects } from "./api/hooks";
 import { Icons } from "./components/icons";
@@ -34,6 +34,7 @@ import { BacklogPage } from "./pages/BacklogPage";
 import { RequirementsPage } from "./pages/RequirementsPage";
 import { ReleasesPage } from "./pages/ReleasesPage";
 import { ReportsPage } from "./pages/ReportsPage";
+import { LogsPage } from "./pages/LogsPage";
 
 const TABS = [
   { to: "dashboard", label: "Overview", section: "dashboard", icon: Icons.dashboard },
@@ -47,6 +48,8 @@ const TABS = [
   { to: "reports", label: "Reports", section: "dashboard", icon: Icons.reports },
 ] as const;
 
+// Project admins and test managers only - who did what, project-wide.
+const LOGS_TAB = { to: "logs", label: "Logs", section: "dashboard", icon: Icons.logs } as const;
 const SETTINGS_TAB = { to: "settings", label: "Settings", section: "settings", icon: Icons.settings } as const;
 
 /** Route a project-wide search: readable keys jump to their record, free text
@@ -110,7 +113,11 @@ function Shell() {
     );
   }
 
-  const tabs = canManageProject(role) ? [...TABS, SETTINGS_TAB] : TABS;
+  const tabs = [
+    ...TABS,
+    ...(canAuthor(role) ? [LOGS_TAB] : []),
+    ...(canManageProject(role) ? [SETTINGS_TAB] : []),
+  ];
   const current = tabs.find((t) => loc.pathname.includes(`/${t.to}`)) ?? tabs[0];
   const go = (to: string) => { setNavOpen(false); nav(`/p/${projectKey}/${to}`); };
 
@@ -148,6 +155,15 @@ function Shell() {
             <Route path="requirements" element={<RequirementsPage />} />
             <Route path="defects" element={<BacklogPage />} />
             <Route path="reports" element={<ReportsPage />} />
+            <Route
+              path="logs"
+              element={
+                // role resolves after `project` loads (a separate query) - on a
+                // fresh page load it's briefly null even for an authorized user,
+                // so don't redirect until we actually know one way or the other.
+                !project ? <p>Loading…</p> : canAuthor(role) ? <LogsPage /> : <Navigate to="../dashboard" replace />
+              }
+            />
             <Route path="backlog" element={<Navigate to="../requirements" replace />} />
             <Route path="settings" element={<ProjectSettingsPage />} />
             <Route path="*" element={<Navigate to="dashboard" replace />} />

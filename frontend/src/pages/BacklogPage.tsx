@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { http } from "../api/client";
 import { useProject } from "../api/hooks";
@@ -93,6 +93,9 @@ export function BacklogPage() {
   const qc = useQueryClient();
   const toast = useToast();
   const [dialog, setDialog] = useState<null | "defect">(null);
+  const [params, setParams] = useSearchParams();
+  const idsFilter = params.get("ids");
+  const clearIdsFilter = () => setParams((p) => { p.delete("ids"); return p; }, { replace: true });
 
   const releases = useQuery({
     queryKey: ["releases", pid],
@@ -116,6 +119,9 @@ export function BacklogPage() {
 
   if (!project) return <p>Loading…</p>;
 
+  const idSet = idsFilter ? new Set(idsFilter.split(",")) : null;
+  const rows = idSet ? (defects.data?.items ?? []).filter((d) => idSet.has(d.id)) : defects.data?.items ?? [];
+
   return (
     <>
       <div className="page-header">
@@ -128,11 +134,20 @@ export function BacklogPage() {
         </div>
       </div>
 
+      {idSet && (
+        <div className="req-toolbar">
+          <span className="req-chip">
+            Linked defects only
+            <button onClick={clearIdsFilter} aria-label="Clear linked-only filter">✕</button>
+          </span>
+        </div>
+      )}
+
       <Listing
         title="Defects"
         accent="var(--sec-traceability)"
         defaultSort="key"
-        rows={defects.data?.items ?? []}
+        rows={rows}
         columns={[
           { key: "key", label: "Key", className: "key nowrap", render: (d: Defect) => d.key },
           { key: "summary", label: "Summary", render: (d: Defect) => d.summary },

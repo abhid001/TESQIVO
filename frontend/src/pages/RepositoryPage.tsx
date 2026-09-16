@@ -18,10 +18,11 @@ export function RepositoryPage() {
   const pid = project?.id;
   const qc = useQueryClient();
   const toast = useToast();
-  const [params] = useSearchParams();
+  const [params, setParams] = useSearchParams();
   const [q, setQ] = useState(params.get("q") ?? "");
   const [state, setState] = useState("");
   const [planId, setPlanId] = useState("");
+  const [idsFilter, setIdsFilter] = useState(params.get("ids") ?? "");
   const [page, setPage] = useState(1);
   const [sort, setSort] = useState<SortState>({ field: "key", dir: "asc" });
   const [creating, setCreating] = useState(false);
@@ -41,7 +42,7 @@ export function RepositoryPage() {
 
   const sortParam = `${sort.dir === "desc" ? "-" : ""}${sort.field}`;
   const list = useQuery({
-    queryKey: ["testcases", pid, q, state, planId, page, sortParam],
+    queryKey: ["testcases", pid, q, state, planId, idsFilter, page, sortParam],
     queryFn: () =>
       http.get<Paginated<TestCase>>(
         `/projects/${pid}/test-cases?` +
@@ -49,6 +50,7 @@ export function RepositoryPage() {
             ...(q ? { q } : {}),
             ...(state ? { state } : {}),
             ...(planId === "none" ? { unassigned: "true" } : planId ? { plan_id: planId } : {}),
+            ...(idsFilter ? { ids: idsFilter } : {}),
             sort: sortParam,
             page: String(page),
             page_size: String(PAGE_SIZE),
@@ -61,6 +63,11 @@ export function RepositoryPage() {
   useEffect(() => {
     if (urlQ !== null) { setQ(urlQ); setPage(1); }
   }, [urlQ]);
+
+  const clearIdsFilter = () => {
+    setIdsFilter("");
+    setParams((p) => { p.delete("ids"); return p; }, { replace: true });
+  };
 
   const invalidate = () => qc.invalidateQueries({ queryKey: ["testcases"] });
 
@@ -139,6 +146,12 @@ export function RepositoryPage() {
             <option key={p.id} value={p.id}>{p.key} · {p.name}</option>
           ))}
         </select>
+        {idsFilter && (
+          <span className="req-chip">
+            Linked test cases only
+            <button onClick={clearIdsFilter} aria-label="Clear linked-only filter">✕</button>
+          </span>
+        )}
       </div>
 
       {list.isLoading ? (

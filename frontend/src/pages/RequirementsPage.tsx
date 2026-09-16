@@ -1,5 +1,5 @@
-import { useMemo, useRef, useState, type ReactNode } from "react";
-import { useParams, useSearchParams } from "react-router-dom";
+import { useMemo, useRef, useState } from "react";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { http } from "../api/client";
 import { useProject } from "../api/hooks";
@@ -27,7 +27,7 @@ const NEXT_STATUS: Record<string, string[]> = {
   fulfilled: ["active", "archived"],
   archived: ["draft"],
 };
-const PAGE = 20;
+const PAGE = 10;
 
 function relDate(iso: string): string {
   const d = new Date(iso);
@@ -101,25 +101,6 @@ function parseCsv(text: string): Record<string, string>[] {
   });
 }
 
-/* ------------------------------ stat card ------------------------------ */
-function StatCard({
-  icon, label, value, tone, onClick, active,
-}: { icon: ReactNode; label: string; value: number; tone?: "ok" | "warn" | "info" | "purple"; onClick?: () => void; active?: boolean }) {
-  const Comp = onClick ? "button" : "div";
-  return (
-    <Comp
-      className={`kpi ${onClick ? "clickable" : "static"} ${tone ? `tone-${tone}` : ""} ${active ? "selected-row" : ""}`}
-      onClick={onClick}
-    >
-      <span className="kpi-icon">{icon}</span>
-      <div className="kpi-main">
-        <span className="kpi-label">{label}</span>
-        <div className="kpi-value">{value}</div>
-      </div>
-    </Comp>
-  );
-}
-
 /* -------------------------------- page --------------------------------- */
 export function RequirementsPage() {
   const { projectKey } = useParams();
@@ -134,8 +115,6 @@ export function RequirementsPage() {
   const [priority, setPriority] = useState("");
   const [status, setStatus] = useState("active");
   const [reqType, setReqType] = useState("");
-  const [coverageFilter, setCoverageFilter] = useState<"" | "covered" | "uncovered" | "changed">("");
-  const [showMoreFilters, setShowMoreFilters] = useState(false);
   const [view, setView] = useState<"list" | "grid">("list");
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [sort, setSort] = useState<SortState>({ field: "key", dir: "asc" });
@@ -181,7 +160,7 @@ export function RequirementsPage() {
   // Everything except the stat-card toggle itself - the stat cards summarize
   // this set, so clicking one (e.g. "Uncovered") doesn't make its own count
   // collapse to zero or throw the other three cards off.
-  const searchedAndFiltered = useMemo(() => {
+  const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     return allRows.filter((r) => {
       if (q && !(r.title.toLowerCase().includes(q) || r.key.toLowerCase().includes(q) || (r.description ?? "").toLowerCase().includes(q))) return false;
@@ -192,22 +171,6 @@ export function RequirementsPage() {
       return true;
     });
   }, [allRows, search, release, priority, status, reqType]);
-
-  const filtered = useMemo(() => {
-    if (!coverageFilter) return searchedAndFiltered;
-    return searchedAndFiltered.filter((r) => {
-      if (coverageFilter === "covered") return r.qualifying_test_count > 0;
-      if (coverageFilter === "uncovered") return r.qualifying_test_count === 0;
-      return r.version > 1; // changed
-    });
-  }, [searchedAndFiltered, coverageFilter]);
-
-  const stats = useMemo(() => {
-    const total = searchedAndFiltered.length;
-    const covered = searchedAndFiltered.filter((r) => r.qualifying_test_count > 0).length;
-    const changed = searchedAndFiltered.filter((r) => r.version > 1).length;
-    return { total, covered, uncovered: total - covered, changed };
-  }, [searchedAndFiltered]);
 
   const col = { key: (r: Requirement) => r.key, title: (r: Requirement) => r.title, priority: (r: Requirement) => r.priority, status: (r: Requirement) => r.status, owner_name: (r: Requirement) => r.owner_name ?? "", linked_test_count: (r: Requirement) => r.linked_test_count, updated_at: (r: Requirement) => r.updated_at, coverage: (r: Requirement) => coveragePct(r) };
   const getter = (col as Record<string, (r: Requirement) => unknown>)[sort.field] ?? col.key;
@@ -267,25 +230,6 @@ export function RequirementsPage() {
         </div>
       </div>
 
-      <div className="kpi-grid-4">
-        <StatCard
-          icon={Icons.requirements} label="Total Requirements" value={stats.total}
-          active={coverageFilter === ""} onClick={() => setCoverageFilter("")}
-        />
-        <StatCard
-          icon={Icons.checkCircle} label="Covered" tone="ok" value={stats.covered}
-          active={coverageFilter === "covered"} onClick={() => setCoverageFilter((v) => (v === "covered" ? "" : "covered"))}
-        />
-        <StatCard
-          icon={Icons.alertTriangle} label="Uncovered" tone="warn" value={stats.uncovered}
-          active={coverageFilter === "uncovered"} onClick={() => setCoverageFilter((v) => (v === "uncovered" ? "" : "uncovered"))}
-        />
-        <StatCard
-          icon={Icons.refresh} label="Changed" tone="purple" value={stats.changed}
-          active={coverageFilter === "changed"} onClick={() => setCoverageFilter((v) => (v === "changed" ? "" : "changed"))}
-        />
-      </div>
-
       <div className="req-toolbar">
         <div className="req-search">
           {Icons.search}
@@ -318,9 +262,10 @@ export function RequirementsPage() {
             {STATUSES.map((s) => <option key={s} value={s}>{cap(s)}</option>)}
           </select>
         )}
-        <button className={showMoreFilters ? "primary sm" : "sm"} onClick={() => setShowMoreFilters((v) => !v)}>
-          {Icons.filter} More filters
-        </button>
+        <select className="filter-select" value={reqType} onChange={(e) => { setReqType(e.target.value); setPage(1); }}>
+          <option value="">Type: All</option>
+          {REQ_TYPES.map((t) => <option key={t} value={t}>{cap(t)}</option>)}
+        </select>
         <span className="spacer-flex" />
         <div className="view-toggle">
           <button className={view === "list" ? "active" : ""} onClick={() => setView("list")} aria-label="List view" aria-pressed={view === "list"}>
@@ -331,19 +276,6 @@ export function RequirementsPage() {
           </button>
         </div>
       </div>
-
-      {showMoreFilters && (
-        <div className="req-toolbar" style={{ marginTop: -4 }}>
-          <select className="filter-select" value={reqType} onChange={(e) => { setReqType(e.target.value); setPage(1); }}>
-            <option value="">Type: All</option>
-            {REQ_TYPES.map((t) => <option key={t} value={t}>{cap(t)}</option>)}
-          </select>
-          <button className="sm ghost"
-            onClick={() => { setReqType(""); setPriority(""); setStatus(""); setRelease(""); setSearch(""); }}>
-            Clear all filters
-          </button>
-        </div>
-      )}
 
       {filtered.length === 0 ? (
         <EmptyState>No requirements match these filters.</EmptyState>
@@ -525,6 +457,7 @@ export function RequirementsPage() {
           onTab={setDrawerTab}
           onClose={() => setDrawerReqId(null)}
           onChanged={invalidate}
+          onEdit={() => { setEditReq(drawerReq); setDrawerReqId(null); }}
         />
       )}
     </>
@@ -552,7 +485,7 @@ function StatusMenu({ onPick }: { onPick: (to: string) => void }) {
 
 /* ------------------------------- drawer -------------------------------- */
 function RequirementDrawer({
-  req, projectId, testCases, defects, activeTab, onTab, onClose, onChanged,
+  req, projectId, testCases, defects, activeTab, onTab, onClose, onChanged, onEdit,
 }: {
   req: Requirement;
   projectId: string;
@@ -562,15 +495,34 @@ function RequirementDrawer({
   onTab: (t: string) => void;
   onClose: () => void;
   onChanged: () => void;
+  onEdit: () => void;
 }) {
   const toast = useToast();
   const qc = useQueryClient();
+  const nav = useNavigate();
 
+  // Fetched eagerly (not just for the Links tab) - the Details tab's Trace
+  // Summary numbers need the actual linked ids to navigate anywhere useful.
   const links = useQuery({
     queryKey: ["req-links", req.id],
     queryFn: () => http.get<{ items: TraceLink[] }>(`/projects/${projectId}/trace-links?entity_type=requirement&entity_id=${req.id}`),
-    enabled: activeTab === "Links",
   });
+  const linkedTestCaseIds = (links.data?.items ?? [])
+    .filter((l) => l.source_id === req.id && l.target_type === "test_case")
+    .map((l) => l.target_id);
+  const linkedDefectIds = (links.data?.items ?? [])
+    .filter((l) => l.target_id === req.id && l.source_type === "defect")
+    .map((l) => l.source_id);
+
+  const goToTestCases = () => {
+    if (linkedTestCaseIds.length === 0) return;
+    nav(`../tests?ids=${linkedTestCaseIds.join(",")}`);
+  };
+  const goToExecutions = () => nav(`../traceability?req=${encodeURIComponent(req.key)}`);
+  const goToDefects = () => {
+    if (linkedDefectIds.length === 0) return;
+    nav(`../defects?ids=${linkedDefectIds.join(",")}`);
+  };
   const history = useQuery({
     queryKey: ["req-history", req.id],
     queryFn: () => http.get<{ items: ActivityItem[] }>(`/requirements/${req.id}/history`),
@@ -602,6 +554,11 @@ function RequirementDrawer({
       tabs={["Details", "Links", "History"]}
       activeTab={activeTab}
       onTab={onTab}
+      headerActions={
+        <button className="icon-btn" title="Edit requirement" aria-label="Edit requirement" onClick={onEdit}>
+          {Icons.edit}
+        </button>
+      }
     >
       {activeTab === "Details" && (
         <>
@@ -629,21 +586,31 @@ function RequirementDrawer({
           <div className="drawer-section">
             <h4>Trace Summary</h4>
             <div className="trace-tiles">
-              <div className="trace-tile">
+              <button
+                className={`trace-tile ${linkedTestCaseIds.length ? "clickable" : "disabled"}`}
+                disabled={linkedTestCaseIds.length === 0}
+                onClick={goToTestCases}
+                title="Open the linked test cases"
+              >
                 <span className="trace-tile-icon" style={{ background: "var(--info-bg)", color: "var(--info)" }}>{Icons.requirements}</span>
                 <div className="trace-tile-value">{summary.test_cases}</div>
                 <div className="trace-tile-label">Test Cases</div>
-              </div>
-              <div className="trace-tile">
+              </button>
+              <button className="trace-tile clickable" onClick={goToExecutions} title="Open in Traceability">
                 <span className="trace-tile-icon" style={{ background: "var(--success-bg)", color: "var(--success)" }}>{Icons.play}</span>
                 <div className="trace-tile-value">{summary.executions}</div>
                 <div className="trace-tile-label">Executions</div>
-              </div>
-              <div className="trace-tile">
+              </button>
+              <button
+                className={`trace-tile ${linkedDefectIds.length ? "clickable" : "disabled"}`}
+                disabled={linkedDefectIds.length === 0}
+                onClick={goToDefects}
+                title="Open the linked defects"
+              >
                 <span className="trace-tile-icon" style={{ background: "var(--danger-bg)", color: "var(--danger)" }}>{Icons.bug}</span>
                 <div className="trace-tile-value">{summary.defects}</div>
                 <div className="trace-tile-label">Defects</div>
-              </div>
+              </button>
             </div>
           </div>
           <a className="btn primary" style={{ width: "100%", justifyContent: "center", display: "flex", gap: 6 }}

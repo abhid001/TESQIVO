@@ -107,6 +107,7 @@ export function Drawer({
   tabs,
   activeTab,
   onTab,
+  headerActions,
   children,
 }: {
   title: ReactNode;
@@ -115,6 +116,7 @@ export function Drawer({
   tabs?: string[];
   activeTab?: string;
   onTab?: (t: string) => void;
+  headerActions?: ReactNode;
   children: ReactNode;
 }) {
   return (
@@ -125,9 +127,12 @@ export function Drawer({
             <h3>{title}</h3>
             {subtitle && <div className="muted small">{subtitle}</div>}
           </div>
-          <button className="ghost sm" onClick={onClose} aria-label="Close">
-            ✕
-          </button>
+          <div className="drawer-head-actions">
+            {headerActions}
+            <button className="ghost sm" onClick={onClose} aria-label="Close">
+              ✕
+            </button>
+          </div>
         </div>
         {tabs && (
           <div className="drawer-tabs" role="tablist">

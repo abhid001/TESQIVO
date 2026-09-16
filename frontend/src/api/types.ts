@@ -72,6 +72,13 @@ export interface ActivityItem {
   at: string;
 }
 
+export interface AuditLogRow extends ActivityItem {
+  actor_username: string | null;
+  entity_type: string;
+  entity_key: string | null;
+  source: string;
+}
+
 export interface Notification {
   id: string;
   kind: string;
