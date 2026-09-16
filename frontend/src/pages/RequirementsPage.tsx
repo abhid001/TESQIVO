@@ -280,25 +280,28 @@ export function RequirementsPage() {
       {filtered.length === 0 ? (
         <EmptyState>No requirements match these filters.</EmptyState>
       ) : view === "grid" ? (
-        <div className="req-cards">
-          {pageRows.map((r) => (
-            <div key={r.id} className="req-card" onClick={() => openDrawer(r)}>
-              <div className="req-card-head">
-                <span className="key-link">{r.key}</span>
-                <Badge value={r.priority} />
+        <>
+          <div className="req-cards">
+            {pageRows.map((r) => (
+              <div key={r.id} className="req-card" onClick={() => openDrawer(r)}>
+                <div className="req-card-head">
+                  <span className="key-link">{r.key}</span>
+                  <Badge value={r.priority} />
+                </div>
+                <div className="req-card-title">{r.title}</div>
+                <div className="coverage-cell">
+                  <div className="coverage-bar"><span className={`coverage-bar-fill ${coverageTone(coveragePct(r))}`} style={{ width: `${coveragePct(r)}%` }} /></div>
+                  <span className="coverage-pct">{coveragePct(r)}%</span>
+                </div>
+                <div className="req-card-foot">
+                  <div className="owner-cell"><Avatar name={r.owner_name} size={22} />{r.owner_name ?? <span className="muted">Unassigned</span>}</div>
+                  <Badge value={r.status} />
+                </div>
               </div>
-              <div className="req-card-title">{r.title}</div>
-              <div className="coverage-cell">
-                <div className="coverage-bar"><span className={`coverage-bar-fill ${coverageTone(coveragePct(r))}`} style={{ width: `${coveragePct(r)}%` }} /></div>
-                <span className="coverage-pct">{coveragePct(r)}%</span>
-              </div>
-              <div className="req-card-foot">
-                <div className="owner-cell"><Avatar name={r.owner_name} size={22} />{r.owner_name ?? <span className="muted">Unassigned</span>}</div>
-                <Badge value={r.status} />
-              </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+          <Pager page={page} pages={pages} total={sorted.length} pageSize={PAGE} onPage={setPage} />
+        </>
       ) : (
         <>
           <div className="table-wrap">
