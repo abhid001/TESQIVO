@@ -462,6 +462,7 @@ async def list_test_cases(
     unassigned: bool = False,
     state: str | None = None,
     query: str | None = None,
+    ids: list[uuid.UUID] | None = None,
     sort: str | None = None,
     page: int = 1,
     page_size: int = 25,
@@ -471,6 +472,8 @@ async def list_test_cases(
 
     authz.require_member(actor, project_id)
     stmt = select(TestCase).where(TestCase.project_id == project_id)
+    if ids is not None:
+        stmt = stmt.where(TestCase.id.in_(ids))
     if folder_id is not None:
         stmt = stmt.where(TestCase.folder_id == folder_id)
     if scenario_id is not None:

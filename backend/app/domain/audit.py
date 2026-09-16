@@ -8,7 +8,7 @@ from __future__ import annotations
 import uuid
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.context import Actor, Ctx
@@ -179,3 +179,49 @@ async def recent_activity(
         )
     ).all()
     return [_summarise(ev, u.display_name if u else "System") for (ev, u) in rows]
+
+
+async def project_log(
+    session: AsyncSession,
+    actor: Actor,
+    *,
+    project_id: uuid.UUID,
+    page: int = 1,
+    page_size: int = 50,
+    entity_type: str | None = None,
+    actor_id: uuid.UUID | None = None,
+    q: str | None = None,
+) -> tuple[list[dict], int]:
+    """Full project activity log - every user action, not just a friendly
+    recent-activity feed. Restricted to project_admin/test_manager (PRS §12:
+    admins can audit who did what)."""
+    from app.domain import authz
+
+    authz.authorize(actor, "audit.view", project_id=project_id)
+    stmt = select(AuditEvent, User).outerjoin(User, User.id == AuditEvent.actor_id).where(
+        AuditEvent.project_id == project_id
+    )
+    if entity_type:
+        stmt = stmt.where(AuditEvent.entity_type == entity_type)
+    if actor_id:
+        stmt = stmt.where(AuditEvent.actor_id == actor_id)
+    if q:
+        like = f"%{q.lower()}%"
+        stmt = stmt.where(
+            func.lower(AuditEvent.action).like(like) | func.lower(AuditEvent.entity_key).like(like)
+        )
+    total = await session.scalar(select(func.count()).select_from(stmt.subquery())) or 0
+    stmt = stmt.order_by(AuditEvent.occurred_at.desc()).limit(page_size).offset((page - 1) * page_size)
+    rows = (await session.execute(stmt)).all()
+    out = []
+    for ev, u in rows:
+        row = _summarise(ev, u.display_name if u else "System")
+        row.update({
+            "actor_username": u.username if u else None,
+            "entity_type": ev.entity_type,
+            "entity_key": ev.entity_key,
+            "action": ev.action,
+            "source": ev.source,
+        })
+        out.append(row)
+    return out, int(total)

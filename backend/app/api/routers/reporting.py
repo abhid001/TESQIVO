@@ -81,6 +81,21 @@ async def project_activity(
     return {"items": items}
 
 
+@router.get("/projects/{project_id}/audit-log")
+async def audit_log(
+    project_id: str, actor: CurrentActor, db: DbSession,
+    entity_type: str | None = None, actor_id: str | None = None, q: str | None = None,
+    page: int = 1, page_size: int = 50,
+) -> dict:
+    items, total = await audit.project_log(
+        db, actor, project_id=uuid.UUID(project_id),
+        page=max(1, page), page_size=max(1, min(page_size, 200)),
+        entity_type=entity_type, actor_id=uuid.UUID(actor_id) if actor_id else None, q=q,
+    )
+    pages = max(1, (total + page_size - 1) // page_size)
+    return {"items": items, "page": page, "page_size": page_size, "total": total, "pages": pages}
+
+
 @router.get("/projects/{project_id}/reports/summary.csv")
 async def summary_csv(
     project_id: str, actor: CurrentActor, db: DbSession,

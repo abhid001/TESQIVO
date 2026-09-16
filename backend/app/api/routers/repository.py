@@ -151,7 +151,7 @@ async def list_test_cases(
     project_id: str, actor: CurrentActor, db: DbSession,
     folder_id: str | None = None, scenario_id: str | None = None,
     plan_id: str | None = None, unassigned: bool = False,
-    state: str | None = None, q: str | None = None,
+    state: str | None = None, q: str | None = None, ids: str | None = None,
     sort: str | None = None,
     page: int = Query(1, ge=1), page_size: int = Query(25, ge=1, le=200),
 ) -> dict:
@@ -161,7 +161,9 @@ async def list_test_cases(
         scenario_id=uuid.UUID(scenario_id) if scenario_id else None,
         plan_id=uuid.UUID(plan_id) if plan_id else None,
         unassigned=unassigned,
-        state=state, query=q, sort=sort, page=page, page_size=page_size,
+        state=state, query=q,
+        ids=[uuid.UUID(i) for i in ids.split(",") if i.strip()] if ids else None,
+        sort=sort, page=page, page_size=page_size,
     )
     plan_map = await _plan_keys_for(db, [tc.id for tc in rows])
     pages = max(1, (total + page_size - 1) // page_size)
