@@ -79,6 +79,8 @@ class TestCaseOut(BaseModel):
     has_draft_changes: bool
     automation_status: str
     version: int
+    created_at: str
+    updated_at: str
 
 
 class FolderOut(BaseModel):
@@ -104,7 +106,18 @@ def _tc_out(tc: TestCase, plan_keys: list[str] | None = None) -> TestCaseOut:
         and tc.approved_version_id is not None,
         automation_status=tc.automation_status,
         version=tc.version,
+        created_at=tc.created_at.isoformat(),
+        updated_at=tc.updated_at.isoformat(),
     )
+
+
+async def _fresh(db: DbSession, tc: TestCase) -> TestCase:
+    """created_at/updated_at are server_default=func.now() - never set
+    client-side, so after the domain layer's session.commit() they're unloaded
+    and a bare attribute access tries a lazy DB round-trip outside an awaited
+    context (MissingGreenlet). Refresh explicitly, the awaited way, first."""
+    await db.refresh(tc)
+    return tc
 
 
 def _steps(model_steps: list[StepModel] | None) -> list[StepInput] | None:
@@ -148,6 +161,7 @@ async def create_test_case(
         steps=_steps(body.steps), automation_status=body.automation_status,
     )
     response.headers["Location"] = f"/api/v1/test-cases/{tc.id}"
+    tc = await _fresh(db, tc)
     return _tc_out(tc)
 
 
@@ -262,6 +276,7 @@ async def update_test_case(
     if body.folder_id is not None:
         kwargs["folder_id"] = uuid.UUID(body.folder_id)
     tc = await tc_service.update_test_case(db, actor, ctx, **kwargs)
+    tc = await _fresh(db, tc)
     return _tc_out(tc)
 
 
@@ -272,6 +287,7 @@ async def transition_version(
     tc = await tc_service.transition_version(
         db, actor, ctx, tc_id=uuid.UUID(tc_id), to_status=body.to, expected_version=body.expected_version
     )
+    tc = await _fresh(db, tc)
     return _tc_out(tc)
 
 
@@ -282,6 +298,7 @@ async def transition_lifecycle(
     tc = await tc_service.transition_lifecycle(
         db, actor, ctx, tc_id=uuid.UUID(tc_id), to_state=body.to, expected_version=body.expected_version
     )
+    tc = await _fresh(db, tc)
     return _tc_out(tc)
 
 
@@ -293,4 +310,5 @@ async def set_automation_status(
         db, actor, ctx, tc_id=uuid.UUID(tc_id),
         automation_status=body.automation_status, expected_version=body.expected_version,
     )
+    tc = await _fresh(db, tc)
     return _tc_out(tc)

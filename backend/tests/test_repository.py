@@ -101,3 +101,33 @@ async def test_optimistic_concurrency_conflict(admin, project):
     )
     assert r.status_code == 409
     assert r.json()["error"]["code"] == "VERSION_CONFLICT"
+
+
+@pytest.mark.asyncio
+async def test_created_and_updated_at_present_after_every_mutation(admin, project):
+    """Regression check for the MissingGreenlet class of bug: created_at/
+    updated_at are server-generated and must be safely readable in the
+    response right after create, edit, and every transition."""
+    tc = await _tc(admin, project)
+    assert tc["created_at"]
+    assert tc["updated_at"]
+
+    r = await admin.patch(f"/api/v1/test-cases/{tc['id']}", json={"expected_version": tc["version"], "title": "Renamed"})
+    assert r.status_code == 200, r.text
+    tc = r.json()
+    assert tc["created_at"] and tc["updated_at"]
+
+    r = await admin.post(
+        f"/api/v1/test-cases/{tc['id']}/version-transitions",
+        json={"to": "in_review", "expected_version": tc["version"]},
+    )
+    assert r.status_code == 200, r.text
+    tc = r.json()
+    assert tc["created_at"] and tc["updated_at"]
+
+    r = await admin.post(
+        f"/api/v1/test-cases/{tc['id']}/automation-status",
+        json={"automation_status": "automated", "expected_version": tc["version"]},
+    )
+    assert r.status_code == 200, r.text
+    assert r.json()["created_at"] and r.json()["updated_at"]
