@@ -49,6 +49,11 @@ class TransitionRequest(BaseModel):
     expected_version: int
 
 
+class AutomationStatusRequest(BaseModel):
+    automation_status: str
+    expected_version: int
+
+
 class VersionOut(BaseModel):
     id: str
     version_number: int
@@ -276,5 +281,16 @@ async def transition_lifecycle(
 ) -> TestCaseOut:
     tc = await tc_service.transition_lifecycle(
         db, actor, ctx, tc_id=uuid.UUID(tc_id), to_state=body.to, expected_version=body.expected_version
+    )
+    return _tc_out(tc)
+
+
+@router.post("/test-cases/{tc_id}/automation-status", response_model=TestCaseOut)
+async def set_automation_status(
+    tc_id: str, body: AutomationStatusRequest, actor: CurrentActor, db: DbSession, ctx: RequestCtx
+) -> TestCaseOut:
+    tc = await tc_service.set_automation_status(
+        db, actor, ctx, tc_id=uuid.UUID(tc_id),
+        automation_status=body.automation_status, expected_version=body.expected_version,
     )
     return _tc_out(tc)

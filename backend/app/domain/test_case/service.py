@@ -401,6 +401,43 @@ async def transition_lifecycle(
     return tc
 
 
+AUTOMATION_STATUSES = ("not_applicable", "candidate", "automated")
+
+
+async def set_automation_status(
+    session: AsyncSession,
+    actor: Actor,
+    ctx: Ctx,
+    *,
+    tc_id: uuid.UUID,
+    automation_status: str,
+    expected_version: int,
+) -> TestCase:
+    """automation_status/is_eligible_for_automation are non-controlled logical
+    fields (controlled_fields.py) - freely settable, no version fork, no review
+    workflow. Still optimistic-concurrency-checked and audited like any write."""
+    tc = await get_test_case(session, actor, tc_id)
+    authz.authorize(actor, "test_case.edit", project_id=tc.project_id, resource=tc)
+    check_version(tc.version, expected_version, entity="test case")
+    if automation_status not in AUTOMATION_STATUSES:
+        raise ValidationFailed(f"Invalid automation status '{automation_status}'.")
+    if tc.lifecycle_state == "archived":
+        raise StateTransitionNotAllowed("Archived test cases cannot be edited; restore first.")
+    before = tc.automation_status
+    tc.automation_status = automation_status
+    tc.is_eligible_for_automation = automation_status != "not_applicable"
+    tc.version += 1
+    await session.flush()
+    audit.record(
+        session, actor=actor, ctx=ctx, entity_type="test_case",
+        action="test_case.automation_status_changed", entity_id=tc.id, entity_key=tc.key,
+        project_id=tc.project_id, before={"automation_status": before},
+        after={"automation_status": automation_status},
+    )
+    await session.commit()
+    return tc
+
+
 # --------------------------------------------------------------------------- helpers
 
 
