@@ -339,11 +339,13 @@ export function RepositoryPage() {
       {editing && (
         <EditTestCaseDialog
           tc={editing}
+          plans={plans.data ?? []}
           onClose={() => setEditing(null)}
           onDone={() => {
             invalidate();
             setEditing(null);
           }}
+          onChanged={invalidate}
         />
       )}
 
@@ -497,14 +499,23 @@ function BulkStatusDialog({ onClose, onApply }: { onClose: () => void; onApply: 
   );
 }
 
+// The three version-level statuses editable in-place (mirrors _VERSION_TRANSITIONS
+// in the backend). Active/deprecated/archived are lifecycle states, not offered here -
+// they're changed via the row's status menu instead.
+const EDITABLE_STATUSES = ["draft", "in_review", "approved"];
+
 function EditTestCaseDialog({
   tc,
+  plans,
   onClose,
   onDone,
+  onChanged,
 }: {
   tc: TestCase;
+  plans: Plan[];
   onClose: () => void;
   onDone: () => void;
+  onChanged: () => void;
 }) {
   const toast = useToast();
   const versions = useQuery({
@@ -519,6 +530,9 @@ function EditTestCaseDialog({
     steps: DraftStep[];
     change_summary: string;
   } | null>(null);
+  const [status, setStatus] = useState(tc.lifecycle_state);
+  const [linkedPlanKeys, setLinkedPlanKeys] = useState<string[]>(tc.plan_keys ?? []);
+  const [planPick, setPlanPick] = useState("");
 
   if (versions.data && current && form === null) {
     setForm({
@@ -532,22 +546,44 @@ function EditTestCaseDialog({
     });
   }
 
+  const canPickStatus = EDITABLE_STATUSES.includes(tc.lifecycle_state);
+
   const save = useMutation({
-    mutationFn: () =>
-      http.patch(`/test-cases/${tc.id}`, {
+    mutationFn: async () => {
+      const updated = await http.patch<TestCase>(`/test-cases/${tc.id}`, {
         expected_version: tc.version,
         title: form!.title,
         description: form!.description || null,
         preconditions: form!.preconditions || null,
         steps: form!.steps.filter((s) => s.action && s.expected_result),
         change_summary: form!.change_summary || null,
-      }),
+      });
+      if (canPickStatus && status !== tc.lifecycle_state) {
+        await transitionTestCase(updated, status);
+      }
+    },
     onSuccess: () => {
       toast("Test case updated");
       onDone();
     },
     onError: (e) => toast(errText(e), "error"),
   });
+
+  const addToPlan = useMutation({
+    mutationFn: (planId: string) => http.post(`/plans/${planId}/scope`, { test_case_ids: [tc.id] }),
+    onSuccess: (_d, planId) => {
+      const plan = plans.find((p) => p.id === planId);
+      if (plan) setLinkedPlanKeys((prev) => (prev.includes(plan.key) ? prev : [...prev, plan.key]));
+      setPlanPick("");
+      toast("Added to test plan");
+      onChanged();
+    },
+    onError: (e) => toast(errText(e), "error"),
+  });
+
+  const availablePlans = plans.filter(
+    (p) => (p.status === "draft" || p.status === "active") && !linkedPlanKeys.includes(p.key),
+  );
 
   return (
     <Dialog title={`Edit ${tc.key}`} onClose={onClose}>
@@ -559,6 +595,21 @@ function EditTestCaseDialog({
             Editing controlled content on an approved / active test case forks a new Draft version;
             existing cycles keep the version they snapshotted.
           </p>
+          {canPickStatus && (
+            <Field label="Status">
+              <select value={status} onChange={(e) => setStatus(e.target.value)}>
+                {EDITABLE_STATUSES.map((s) => (
+                  <option
+                    key={s}
+                    value={s}
+                    disabled={s !== tc.lifecycle_state && !VERSION_MOVES.has(`${tc.lifecycle_state}>${s}`)}
+                  >
+                    {cap(s)}
+                  </option>
+                ))}
+              </select>
+            </Field>
+          )}
           <Field label="Title">
             <input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
           </Field>
@@ -580,6 +631,32 @@ function EditTestCaseDialog({
               value={form.change_summary}
               onChange={(e) => setForm({ ...form, change_summary: e.target.value })}
             />
+          </Field>
+          <Field label="Test plans">
+            {linkedPlanKeys.length > 0 && (
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 8 }}>
+                {linkedPlanKeys.map((k) => (
+                  <span key={k} className="req-chip">{k}</span>
+                ))}
+              </div>
+            )}
+            <div className="inline-actions">
+              <select value={planPick} onChange={(e) => setPlanPick(e.target.value)} style={{ flex: 1 }}>
+                <option value="">
+                  {availablePlans.length === 0 ? "No plans available to add" : "Choose a test plan…"}
+                </option>
+                {availablePlans.map((p) => (
+                  <option key={p.id} value={p.id}>{p.key} · {p.name}</option>
+                ))}
+              </select>
+              <button
+                className="sm"
+                disabled={!planPick || addToPlan.isPending}
+                onClick={() => addToPlan.mutate(planPick)}
+              >
+                Add
+              </button>
+            </div>
           </Field>
           <button
             className="primary"
