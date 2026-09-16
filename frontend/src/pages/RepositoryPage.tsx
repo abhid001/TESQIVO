@@ -3,14 +3,49 @@ import { Link, useParams, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { http } from "../api/client";
 import { useProject } from "../api/hooks";
-import type { Paginated, Plan, Scenario, TestCase, Version } from "../api/types";
-import { Badge, Dialog, EmptyState, Field, errText, useToast } from "../ui";
+import type { Paginated, Plan, TestCase, Version } from "../api/types";
+import { Badge, Dialog, EmptyState, Field, cap, errText, useToast } from "../ui";
 import { StepEditor, type DraftStep } from "../components/StepEditor";
 import { Pager, SortHeader, type SortState } from "../components/table";
 import { Icons } from "../components/icons";
 
-const PAGE_SIZE = 20;
+const PAGE_SIZE = 10;
 const STATES = ["draft", "in_review", "approved", "active", "deprecated", "archived"];
+const AUTOMATION_STATUSES = ["not_applicable", "candidate", "automated"];
+
+/* -------------------------- workflow transitions -------------------------- */
+// Mirrors the backend's exact transition tables (domain/test_case/service.py
+// _VERSION_TRANSITIONS / _LOGICAL_TRANSITIONS) so the UI only ever offers a
+// move it knows is valid, and bulk actions can silently skip rows for which
+// the target isn't reachable from their current state.
+const VERSION_MOVES = new Set(["draft>in_review", "in_review>draft", "in_review>approved"]);
+const LOGICAL_MOVES = new Set([
+  "approved>active", "active>deprecated", "deprecated>active",
+  "active>archived", "deprecated>archived", "approved>archived",
+  "draft>archived", "in_review>archived", "archived>draft",
+]);
+
+function transitionTestCase(tc: TestCase, to: string) {
+  const key = `${tc.lifecycle_state}>${to}`;
+  if (VERSION_MOVES.has(key)) {
+    return http.post(`/test-cases/${tc.id}/version-transitions`, { to, expected_version: tc.version });
+  }
+  if (LOGICAL_MOVES.has(key)) {
+    return http.post(`/test-cases/${tc.id}/lifecycle-transitions`, { to, expected_version: tc.version });
+  }
+  return Promise.reject(new Error(`Cannot move from ${tc.lifecycle_state} to ${to}`));
+}
+
+function nextActions(tc: TestCase): { label: string; to: string }[] {
+  switch (tc.lifecycle_state) {
+    case "draft": return [{ label: "Submit for review", to: "in_review" }];
+    case "in_review": return [{ label: "Approve version", to: "approved" }, { label: "Request changes", to: "draft" }];
+    case "approved": return [{ label: "Activate", to: "active" }];
+    case "active": return [{ label: "Deprecate", to: "deprecated" }];
+    case "deprecated": return [{ label: "Reinstate", to: "active" }];
+    default: return [];
+  }
+}
 
 export function RepositoryPage() {
   const { projectKey } = useParams();
@@ -24,16 +59,13 @@ export function RepositoryPage() {
   const [planId, setPlanId] = useState("");
   const [idsFilter, setIdsFilter] = useState(params.get("ids") ?? "");
   const [page, setPage] = useState(1);
-  const [sort, setSort] = useState<SortState>({ field: "key", dir: "asc" });
+  const [sort, setSort] = useState<SortState>({ field: "created_at", dir: "desc" });
   const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState<TestCase | null>(null);
   const [confirm, setConfirm] = useState<{ tc: TestCase; action: "archive" | "restore" } | null>(null);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [bulkDialog, setBulkDialog] = useState<null | "automation" | "status">(null);
 
-  const scenarios = useQuery({
-    queryKey: ["scenarios", pid, ""],
-    queryFn: () => http.get<{ items: Scenario[] }>(`/projects/${pid}/scenarios`),
-    enabled: !!pid,
-  });
   const plans = useQuery({
     queryKey: ["plans", pid],
     queryFn: () => http.get<Plan[]>(`/projects/${pid}/plans`),
@@ -71,10 +103,9 @@ export function RepositoryPage() {
 
   const invalidate = () => qc.invalidateQueries({ queryKey: ["testcases"] });
 
-  const [form, setForm] = useState<{ title: string; description: string; scenario_id: string; steps: DraftStep[] }>({
+  const [form, setForm] = useState<{ title: string; description: string; steps: DraftStep[] }>({
     title: "",
     description: "",
-    scenario_id: "",
     steps: [{ action: "", expected_result: "", is_required: true }],
   });
 
@@ -83,14 +114,12 @@ export function RepositoryPage() {
       http.post(`/projects/${pid}/test-cases`, {
         title: form.title,
         description: form.description,
-        scenario_id: form.scenario_id || null,
         steps: form.steps.filter((s) => s.action && s.expected_result),
       }),
     onSuccess: () => {
       invalidate();
-      qc.invalidateQueries({ queryKey: ["scenarios"] });
       setCreating(false);
-      setForm({ title: "", description: "", scenario_id: "", steps: [{ action: "", expected_result: "", is_required: true }] });
+      setForm({ title: "", description: "", steps: [{ action: "", expected_result: "", is_required: true }] });
       toast("Test case created");
     },
     onError: (e) => toast(errText(e), "error"),
@@ -107,13 +136,34 @@ export function RepositoryPage() {
     onError: (e) => toast(errText(e), "error"),
   });
 
+  const changeStatus = useMutation({
+    mutationFn: ({ tc, to }: { tc: TestCase; to: string }) => transitionTestCase(tc, to),
+    onSuccess: () => { invalidate(); toast("Status updated"); },
+    onError: (e) => toast(errText(e), "error"),
+  });
+
+  const setAutomation = useMutation({
+    mutationFn: ({ tc, automation_status }: { tc: TestCase; automation_status: string }) =>
+      http.post(`/test-cases/${tc.id}/automation-status`, { automation_status, expected_version: tc.version }),
+    onSuccess: () => invalidate(),
+    onError: (e) => toast(errText(e), "error"),
+  });
+
   const onSort = (s: SortState) => {
     setSort(s);
     setPage(1);
   };
+  const goToPage = (p: number) => { setPage(p); setSelected(new Set()); };
+
+  const data = list.data;
+  const pageRows = data?.items ?? [];
+  const toggleSelect = (id: string) =>
+    setSelected((prev) => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  const toggleSelectAll = () =>
+    setSelected((prev) => (prev.size === pageRows.length ? new Set() : new Set(pageRows.map((r) => r.id))));
+  const clearSelection = () => setSelected(new Set());
 
   if (!project) return <p>Loading…</p>;
-  const data = list.data;
 
   return (
     <>
@@ -136,7 +186,7 @@ export function RepositoryPage() {
         <select value={state} onChange={(e) => { setState(e.target.value); setPage(1); }}>
           <option value="">Any state</option>
           {STATES.map((s) => (
-            <option key={s}>{s}</option>
+            <option key={s} value={s}>{cap(s)}</option>
           ))}
         </select>
         <select value={planId} onChange={(e) => { setPlanId(e.target.value); setPage(1); }}>
@@ -162,17 +212,24 @@ export function RepositoryPage() {
             <table>
               <thead>
                 <tr>
+                  <th className="checkbox-cell">
+                    <input type="checkbox" checked={pageRows.length > 0 && selected.size === pageRows.length} onChange={toggleSelectAll} aria-label="Select all" />
+                  </th>
                   <SortHeader label="Key" field="key" sort={sort} onSort={onSort} className="nowrap" />
                   <SortHeader label="Title" field="title" sort={sort} onSort={onSort} />
                   <th className="nowrap">Test Plan</th>
                   <SortHeader label="State" field="state" sort={sort} onSort={onSort} className="nowrap" />
                   <SortHeader label="Automation" field="automation" sort={sort} onSort={onSort} className="nowrap" />
+                  <SortHeader label="Created" field="created_at" sort={sort} onSort={onSort} className="nowrap" />
                   <th className="nowrap">Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {data.items.map((tc) => (
-                  <tr key={tc.id}>
+                  <tr key={tc.id} className={selected.has(tc.id) ? "selected-row" : ""}>
+                    <td className="checkbox-cell">
+                      <input type="checkbox" checked={selected.has(tc.id)} onChange={() => toggleSelect(tc.id)} aria-label={`Select ${tc.key}`} />
+                    </td>
                     <td className="key">
                       <Link to={`/p/${projectKey}/tests/${tc.id}`}>{tc.key}</Link>
                     </td>
@@ -185,12 +242,26 @@ export function RepositoryPage() {
                         ? <span className="key">{tc.plan_keys.join(", ")}</span>
                         : <span className="muted">—</span>}
                     </td>
-                    <td>
+                    <td className="nowrap">
                       <Badge value={tc.lifecycle_state} />
                     </td>
-                    <td>{tc.automation_status}</td>
                     <td className="nowrap">
-                      <div className="inline-actions">
+                      <select
+                        className="filter-select"
+                        style={{ minWidth: 140 }}
+                        value={tc.automation_status}
+                        disabled={tc.lifecycle_state === "archived" || setAutomation.isPending}
+                        onChange={(e) => setAutomation.mutate({ tc, automation_status: e.target.value })}
+                      >
+                        {AUTOMATION_STATUSES.map((a) => <option key={a} value={a}>{cap(a)}</option>)}
+                      </select>
+                    </td>
+                    <td className="nowrap muted small">{relDate(tc.created_at)}</td>
+                    <td className="nowrap">
+                      <div className="row-actions">
+                        {nextActions(tc).length > 0 && (
+                          <TcStatusMenu actions={nextActions(tc)} onPick={(to) => changeStatus.mutate({ tc, to })} />
+                        )}
                         {tc.lifecycle_state !== "archived" && (
                           <button className="icon-btn" title="Edit" onClick={() => setEditing(tc)}>
                             {Icons.edit}
@@ -225,31 +296,33 @@ export function RepositoryPage() {
             pages={data.pages ?? 1}
             total={data.total}
             pageSize={data.page_size}
-            onPage={setPage}
+            onPage={goToPage}
           />
         </>
       ) : (
         <EmptyState>No test cases match.</EmptyState>
       )}
 
+      {selected.size > 0 && (
+        <div className="bulk-bar">
+          <span className="bulk-count">{selected.size} selected</span>
+          <button className="sm" onClick={() => setBulkDialog("status")}>{Icons.refresh} Change Status</button>
+          <button className="sm" onClick={() => setBulkDialog("automation")}>{Icons.robot} Set Automation</button>
+          <span className="spacer-flex" />
+          <button className="icon-btn" onClick={clearSelection} aria-label="Clear selection">✕</button>
+        </div>
+      )}
+
       {creating && (
         <Dialog title="New test case" onClose={() => setCreating(false)}>
           <Field label="Title">
-            <input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
+            <input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} autoFocus />
           </Field>
           <Field label="Description">
             <textarea
               value={form.description}
               onChange={(e) => setForm({ ...form, description: e.target.value })}
             />
-          </Field>
-          <Field label="Scenario (optional)">
-            <select value={form.scenario_id} onChange={(e) => setForm({ ...form, scenario_id: e.target.value })}>
-              <option value="">— none —</option>
-              {scenarios.data?.items.filter((s) => s.status === "active").map((s) => (
-                <option key={s.id} value={s.id}>{s.key} · {s.title}</option>
-              ))}
-            </select>
           </Field>
           <StepEditor steps={form.steps} onChange={(steps) => setForm({ ...form, steps })} />
           <button
@@ -307,7 +380,120 @@ export function RepositoryPage() {
           </div>
         </Dialog>
       )}
+
+      {bulkDialog === "automation" && (
+        <BulkAutomationDialog
+          onClose={() => setBulkDialog(null)}
+          onApply={async (automation_status) => {
+            const targets = data?.items.filter((tc) => selected.has(tc.id)) ?? [];
+            let ok = 0;
+            for (const tc of targets) {
+              try {
+                await http.post(`/test-cases/${tc.id}/automation-status`, { automation_status, expected_version: tc.version });
+                ok++;
+              } catch { /* skip - e.g. archived */ }
+            }
+            invalidate();
+            toast(`Updated automation status for ${ok} of ${targets.length} test case(s)`);
+            clearSelection();
+            setBulkDialog(null);
+          }}
+        />
+      )}
+
+      {bulkDialog === "status" && (
+        <BulkStatusDialog
+          onClose={() => setBulkDialog(null)}
+          onApply={async (to) => {
+            const targets = data?.items.filter((tc) => selected.has(tc.id)) ?? [];
+            let ok = 0;
+            for (const tc of targets) {
+              try {
+                await transitionTestCase(tc, to);
+                ok++;
+              } catch { /* not a valid move from this row's current state - skip */ }
+            }
+            invalidate();
+            toast(`Moved ${ok} of ${targets.length} test case(s) to ${cap(to)}${ok < targets.length ? " (others were skipped - not a valid move from their current state)" : ""}`);
+            clearSelection();
+            setBulkDialog(null);
+          }}
+        />
+      )}
     </>
+  );
+}
+
+function relDate(iso: string): string {
+  const d = new Date(iso);
+  const days = (Date.now() - d.getTime()) / 86_400_000;
+  if (days < 1) return "Today";
+  if (days < 2) return "Yesterday";
+  return d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+}
+
+function TcStatusMenu({ actions, onPick }: { actions: { label: string; to: string }[]; onPick: (to: string) => void }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div style={{ position: "relative" }}>
+      <button className="icon-btn" title="Change status" aria-label="Change status" onClick={() => setOpen((v) => !v)}>
+        {Icons.refresh}
+      </button>
+      {open && (
+        <div className="app-menu-panel" style={{ position: "absolute", right: 0, top: "100%", marginTop: 6, padding: 6, minWidth: 170, zIndex: 10 }}>
+          {actions.map((a) => (
+            <button key={a.to} className="ghost sm" style={{ display: "block", width: "100%", textAlign: "left" }}
+              onClick={() => { onPick(a.to); setOpen(false); }}>
+              {a.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function BulkAutomationDialog({ onClose, onApply }: { onClose: () => void; onApply: (v: string) => Promise<void> }) {
+  const [value, setValue] = useState("candidate");
+  const [busy, setBusy] = useState(false);
+  return (
+    <Dialog title="Set automation status" onClose={onClose}>
+      <Field label="Automation status">
+        <select value={value} onChange={(e) => setValue(e.target.value)}>
+          {AUTOMATION_STATUSES.map((a) => <option key={a} value={a}>{cap(a)}</option>)}
+        </select>
+      </Field>
+      <div className="inline-actions" style={{ marginTop: 4 }}>
+        <button className="primary" disabled={busy} onClick={async () => { setBusy(true); await onApply(value); setBusy(false); }}>
+          {busy ? "Applying…" : "Apply"}
+        </button>
+        <button onClick={onClose}>Cancel</button>
+      </div>
+    </Dialog>
+  );
+}
+
+function BulkStatusDialog({ onClose, onApply }: { onClose: () => void; onApply: (to: string) => Promise<void> }) {
+  const [value, setValue] = useState("in_review");
+  const [busy, setBusy] = useState(false);
+  return (
+    <Dialog title="Change status" onClose={onClose}>
+      <p className="muted small" style={{ marginTop: 0 }}>
+        Applies to every selected test case for which this is a valid move from its current
+        state; others are left unchanged.
+      </p>
+      <Field label="Target status">
+        <select value={value} onChange={(e) => setValue(e.target.value)}>
+          {STATES.map((s) => <option key={s} value={s}>{cap(s)}</option>)}
+        </select>
+      </Field>
+      <div className="inline-actions" style={{ marginTop: 4 }}>
+        <button className="primary" disabled={busy} onClick={async () => { setBusy(true); await onApply(value); setBusy(false); }}>
+          {busy ? "Applying…" : "Apply"}
+        </button>
+        <button onClick={onClose}>Cancel</button>
+      </div>
+    </Dialog>
   );
 }
 

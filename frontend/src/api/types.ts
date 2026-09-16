@@ -156,6 +156,8 @@ export interface TestCase {
   has_draft_changes: boolean;
   automation_status: string;
   version: number;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface Version {
