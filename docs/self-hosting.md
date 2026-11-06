@@ -50,6 +50,7 @@ Other useful ones:
 | `TESQIVO_VERSION` | `latest` | pin a released tag, e.g. `v0.2.0` |
 | `TESQIVO_SECRET_KEY` | auto-generated | a random key is created on first boot and stored at `/data/secret_key` inside the `appdata` volume so sessions survive restarts. Set this explicitly only if you want to manage it yourself or run more than one host against the same database. |
 | `TESQIVO_SMTP_*` | unset | outbound email for self-service password reset. With email off, "Forgot password?" tells users to contact an admin, and admins reset accounts from the console. Administrator accounts are never emailed a temporary password. |
+| `TESQIVO_AI_API_KEY` | unset | Anthropic API key that turns on the AI features. Content is sent to Anthropic's API when set; see [ai.md](ai.md) for privacy, cost and the other `TESQIVO_AI_*` settings. |
 
 The app refuses to start only if `TESQIVO_DB_URL`, `TESQIVO_REDIS_URL` or
 `TESQIVO_PUBLIC_URL` is genuinely invalid — the bundled Compose file provides all three.

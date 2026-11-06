@@ -9,7 +9,8 @@ on top of it and requires a subscription.
 | Licence | AGPL-3.0 (free) | Proprietary (subscription) |
 | Image | `ghcr.io/abhid001/tesqivo` (public) | `ghcr.io/abhid001/tesqivo-enterprise` (private) |
 | Everything in Community | ✅ | ✅ |
-| AI-assisted test authoring (`/api/v1/ee/ai/*`) | — | ✅ (roadmap: LLM generation) |
+| Ask TESQIVO help assistant | ✅ | ✅ |
+| AI Test Design: generate and review test cases (`/api/v1/ee/ai/*`) | — | ✅ (licence `ai` + `TESQIVO_AI_API_KEY`, see [ai.md](ai.md)) |
 | More Enterprise features | — | as released |
 
 Enterprise is the **same** application plus the proprietary `app/ee/` code; the

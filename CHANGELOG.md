@@ -7,6 +7,19 @@ All notable changes to TESQIVO are documented here. The format follows
 ## [Unreleased]
 
 ### Added
+- **Ask TESQIVO help assistant** (Community, D-022). A chat panel that explains the
+  app, grounded in a built-in user guide and the user's real permissions. Sends no
+  project data. Streams over `POST /api/v1/assistant/chat`; availability at
+  `GET /api/v1/assistant/status`. Off unless `TESQIVO_AI_API_KEY` is set
+  ([docs/ai.md](docs/ai.md)).
+- **AI Test Design** (Enterprise, licence `ai`). Generate suggested test cases from
+  requirements, scenarios or a pasted story as a background job, review them (edit,
+  reject, or accept as Draft linked to its requirements), with assumptions, open
+  questions and duplicate flags. Replaces the `draft-test-case` stub. New permission
+  `ai.generate` (testers + test managers); accepting stays a Test Manager action.
+  Tables `ai_generation` / `ai_suggestion` (migration 0008).
+- Test case versions now expose `source_type` and `controlled_metadata`; AI-originated
+  versions are labelled in the UI.
 - **Enterprise edition scaffolding** (D-021). Proprietary `backend/app/ee/` subtree,
   imported at runtime only when present; a signed Ed25519 `TESQIVO_LICENSE_KEY`
   gates paid features (`app/core/license.py`, `require_feature`, 402
@@ -14,7 +27,12 @@ All notable changes to TESQIVO are documented here. The format follows
   `tesqivo-enterprise` (`Dockerfile.enterprise`). `docker-compose.enterprise.yml`
   overlay, `scripts/license/` tooling, `docs/enterprise.md`.
 - `GET /api/v1/version` now reports `edition` and licensed `features`.
-- Stub `POST /api/v1/ee/ai/draft-test-case` (real LLM generation lands later).
+
+### Fixed
+- The Enterprise image now actually ships the Enterprise UI: `Dockerfile.enterprise`
+  builds the SPA with `TESQIVO_EDITION=enterprise` instead of reusing the Community one.
+- Worker renews its job lease while a handler runs, so long jobs aren't re-claimed
+  by another worker partway through.
 
 ### Changed
 - **Relicensed to open-core**: Community edition is **AGPL-3.0** (`LICENSE`);
