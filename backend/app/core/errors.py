@@ -114,6 +114,26 @@ class SetupAlreadyCompleted(DomainError):
     status = 409
 
 
+class AiNotConfigured(DomainError):
+    """No AI provider is configured on this instance (or the kill switch is on)."""
+
+    code = "AI_NOT_CONFIGURED"
+    status = 503
+
+
+class AiProviderError(DependencyUnavailable):
+    """The AI provider timed out, rate-limited us, or failed. Safe to retry."""
+
+    code = "AI_PROVIDER_ERROR"
+
+
+class AiDeclined(DomainError):
+    """The model declined the request, or its output could not be used."""
+
+    code = "AI_DECLINED"
+    status = 422
+
+
 class LicenseRequired(DomainError):
     """An Enterprise feature was called without a valid license covering it."""
 

@@ -64,6 +64,16 @@ class Settings(BaseSettings):
     license_key_file: str = Field(default="/data/license.key", description="Fallback path for the key")
     license_pubkey: str = Field(default="", description="Ed25519 public key (b64); baked into the EE image")
 
+    # --- optional AI (see app/domain/ai/). Off unless an API key is set. The help
+    # assistant is Community; the test-case generator is Enterprise (licence "ai"). ---
+    ai_enabled: bool = Field(default=True, description="Instance-wide kill switch for every AI feature")
+    ai_api_key: str = Field(default="", description="Anthropic API key; unset = AI features off")
+    ai_model: str = "claude-opus-5-5"
+    ai_assistant_effort: str = "low"
+    ai_generation_effort: str = "high"
+    ai_requests_per_user_hour: int = 60
+    ai_max_cases_per_generation: int = 25
+
     # --- optional outbound email (self-service password reset) ---
     smtp_host: str | None = None
     smtp_port: int = 587
@@ -111,6 +121,10 @@ class Settings(BaseSettings):
     @property
     def email_enabled(self) -> bool:
         return bool(self.smtp_host and self.smtp_from)
+
+    @property
+    def ai_available(self) -> bool:
+        return self.ai_enabled and bool(self.ai_api_key.strip())
 
 
 @lru_cache

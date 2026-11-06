@@ -1,6 +1,7 @@
 """Background worker entrypoint (increment 10 foundation).
 
-Phase 1 job types: large CSV export, orphan attachment cleanup, bulk apply. Job
+Phase 1 job types: large CSV export, orphan attachment cleanup, bulk apply. The
+Enterprise edition adds `ai_generate` (app/ee/ai/jobs.py). Job
 state of record is PostgreSQL (`background_job` / `job_item`); Redis is only the
 queue transport. Worker leases + per-item mutation keys prevent duplicate success
 on retry or worker restart (PRS §11).
@@ -73,7 +74,33 @@ async def _process(job: BackgroundJob) -> None:
             j.finished_at = datetime.now(UTC)
             await s.commit()
         return
-    await fn(job.id)
+    beat = asyncio.create_task(_keep_lease(job.id))
+    try:
+        await fn(job.id)
+    finally:
+        beat.cancel()
+
+
+async def _keep_lease(job_id: uuid.UUID) -> None:
+    """Renew the lease while a handler runs, so a long job (an AI generation can
+    take minutes) isn't re-claimed by another worker halfway through."""
+    sm = get_sessionmaker()
+    while True:
+        await asyncio.sleep(LEASE_SECONDS / 3)
+        async with sm() as s:
+            j = await s.get(BackgroundJob, job_id)
+            if j is None or j.status != "running" or j.lease_owner != WORKER_ID:
+                return
+            j.lease_expires_at = datetime.now(UTC) + timedelta(seconds=LEASE_SECONDS)
+            await s.commit()
+
+
+def _register_edition_handlers() -> None:
+    try:
+        from app.ee import register_worker
+    except ModuleNotFoundError:  # Community image: app/ee is not shipped
+        return
+    register_worker()
 
 
 @handler("noop")
@@ -88,7 +115,7 @@ async def _noop(job_id: uuid.UUID) -> None:
 
 async def run_forever(poll_interval: float = 2.0) -> None:
     logging.basicConfig(level=logging.INFO)
-    log.info("worker %s started", WORKER_ID)
+    log.info("worker %s started; job types: %s", WORKER_ID, ", ".join(sorted(HANDLERS)))
     sm = get_sessionmaker()
     while True:
         async with sm() as session:
@@ -110,8 +137,14 @@ async def run_forever(poll_interval: float = 2.0) -> None:
 
 
 def main() -> None:
+    _register_edition_handlers()
     asyncio.run(run_forever())
 
 
 if __name__ == "__main__":
-    main()
+    # `python -m app.worker` runs this file as __main__, a different module object
+    # from `app.worker`. Handlers elsewhere register via `from app.worker import
+    # handler`, so dispatch must happen from the importable module's HANDLERS.
+    from app.worker import main as _main
+
+    _main()

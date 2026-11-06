@@ -31,6 +31,7 @@ type Options = {
   body?: unknown;
   headers?: Record<string, string>;
   raw?: boolean;
+  signal?: AbortSignal;
 };
 
 export async function api<T = unknown>(path: string, opts: Options = {}): Promise<T> {
@@ -49,6 +50,7 @@ export async function api<T = unknown>(path: string, opts: Options = {}): Promis
     headers,
     credentials: "same-origin",
     body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined,
+    signal: opts.signal,
   });
   if (opts.raw) return res as unknown as T;
   if (res.status === 204) return undefined as T;
@@ -67,6 +69,43 @@ export async function api<T = unknown>(path: string, opts: Options = {}): Promis
     );
   }
   return data as T;
+}
+
+/** POST a JSON body and read a Server-Sent Events reply, one parsed `data:` payload
+ *  at a time. Errors before the stream starts throw ApiError like `api()` does. */
+export async function streamEvents<E>(
+  path: string,
+  body: unknown,
+  onEvent: (event: E) => void,
+  signal?: AbortSignal,
+): Promise<void> {
+  const res = await api<Response>(path, { method: "POST", body, raw: true, signal });
+  if (!res.ok) {
+    const text = await res.text();
+    const data = text ? JSON.parse(text) : undefined;
+    throw new ApiError(
+      data?.error ?? {
+        code: "UNKNOWN", message: `Request failed (${res.status})`, status: res.status,
+        correlation_id: res.headers.get("x-correlation-id") ?? "", details: [], retryable: false,
+      },
+    );
+  }
+  const reader = res.body!.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  for (;;) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    let cut: number;
+    while ((cut = buffer.indexOf("\n\n")) >= 0) {
+      const frame = buffer.slice(0, cut);
+      buffer = buffer.slice(cut + 2);
+      for (const line of frame.split("\n")) {
+        if (line.startsWith("data: ")) onEvent(JSON.parse(line.slice(6)) as E);
+      }
+    }
+  }
 }
 
 export const http = {

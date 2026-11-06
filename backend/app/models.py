@@ -753,6 +753,72 @@ class JobItem(UUIDMixin, Base):
     __table_args__ = (UniqueConstraint("job_id", "mutation_key", name="unique_job_mutation"),)
 
 
+# ---------------------------------------------------------------------------
+# AI test-case generation (PRS §17). Written by the Enterprise generator
+# (app/ee/ai); the tables are part of the shared schema so migrations stay linear.
+# ---------------------------------------------------------------------------
+
+
+class AiGeneration(UUIDMixin, Base):
+    """One generation request: sources, options, provider/model, outcome."""
+
+    __tablename__ = "ai_generation"
+
+    project_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("project.id"), nullable=False, index=True)
+    requested_by: Mapped[uuid.UUID] = mapped_column(ForeignKey("app_user.id"), nullable=False)
+    job_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("background_job.id"))
+    status: Mapped[str] = mapped_column(String(16), default="queued", nullable=False)
+    source_refs: Mapped[list] = mapped_column(JSON, default=list, nullable=False)  # [{type,id,key}]
+    story_text: Mapped[str | None] = mapped_column(Text)
+    options: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
+    provider: Mapped[str | None] = mapped_column(String(32))
+    model: Mapped[str | None] = mapped_column(String(80))
+    prompt_version: Mapped[str] = mapped_column(String(16), nullable=False)
+    input_tokens: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    output_tokens: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    assumptions: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
+    open_questions: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
+    error_summary: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(
+        UTCDateTime, server_default=func.now(), nullable=False, index=True
+    )
+    finished_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
+
+    __table_args__ = (
+        CheckConstraint(
+            "status in ('queued','running','completed','failed')", name="ai_generation_status_valid"
+        ),
+    )
+
+
+class AiSuggestion(UUIDMixin, Base):
+    """One suggested test case awaiting a human decision. Never coverage by itself."""
+
+    __tablename__ = "ai_suggestion"
+
+    generation_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("ai_generation.id"), nullable=False, index=True
+    )
+    project_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("project.id"), nullable=False, index=True)
+    ordinal: Mapped[int] = mapped_column(Integer, nullable=False)
+    payload: Mapped[dict] = mapped_column(JSON, nullable=False)
+    status: Mapped[str] = mapped_column(String(16), default="pending", nullable=False)
+    edited: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    possible_duplicate_of: Mapped[str | None] = mapped_column(String(32))  # existing test case key
+    decided_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("app_user.id"))
+    decided_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
+    reject_reason: Mapped[str | None] = mapped_column(String(500))
+    test_case_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("test_case.id"))
+    version: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+
+    __table_args__ = (
+        CheckConstraint(
+            "status in ('pending','accepted','rejected')", name="ai_suggestion_status_valid"
+        ),
+        UniqueConstraint("generation_id", "ordinal", name="unique_suggestion_ordinal"),
+    )
+
+
 class MetricDefinition(Base):
     __tablename__ = "metric_definition"
 

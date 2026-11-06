@@ -18,6 +18,7 @@ dependencies = [
     "redis==5.2.1",
     "rq==2.1.0",
     "httpx==0.28.1",
+    "anthropic==2.6.0",
 ]
 
 [project.optional-dependencies]
@@ -65,3 +66,6 @@ build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
 include = ["app*"]
+
+[tool.setuptools.package-data]
+"app.domain.ai" = ["knowledge/*.md"]

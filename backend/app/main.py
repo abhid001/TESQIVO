@@ -12,6 +12,7 @@ from fastapi.staticfiles import StaticFiles
 from app import __version__
 from app.api import errors, middleware
 from app.api.routers import access as access_router
+from app.api.routers import assistant as assistant_router
 from app.api.routers import auth as auth_router
 from app.api.routers import execution as execution_router
 from app.api.routers import feedback as feedback_router
@@ -56,6 +57,7 @@ def create_app() -> FastAPI:
         reporting_router.router,
         feedback_router.router,
         notifications_router.router,
+        assistant_router.router,
     ):
         app.include_router(r, prefix=API_PREFIX)
 

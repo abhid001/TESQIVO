@@ -6,8 +6,8 @@ name: tesqivo
 #   export TESQIVO_LICENSE_KEY=...        # or put it in /data/license.key
 #   docker compose -f docker-compose.yml -f docker-compose.enterprise.yml up -d
 #
-# A later LLM release adds provider config here (TESQIVO_LLM_PROVIDER / key, or a
-# sidecar). Enterprise pull access to ghcr.io/abhid001/tesqivo-enterprise is
+# AI test-case generation also needs TESQIVO_AI_API_KEY (set in .env; the base file
+# passes it through - see docs/ai.md). Enterprise pull access to ghcr.io/abhid001/tesqivo-enterprise is
 # granted per customer; `docker login ghcr.io` with your token first.
 
 services:

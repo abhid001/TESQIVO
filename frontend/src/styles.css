@@ -1059,3 +1059,57 @@ ul.plain-list li a { flex: 1; }
 @media (min-width: 901px) {
   .nav-toggle { display: none; }
 }
+
+/* ---- Ask TESQIVO assistant (stacked above the Feedback button) ---- */
+.assistant-fab {
+  position: fixed; right: 18px; bottom: 66px; z-index: 30;
+  display: flex; align-items: center; gap: 7px;
+  background: var(--surface); color: var(--primary);
+  border: 1px solid var(--border); border-radius: 999px; padding: 9px 15px;
+  font-weight: 600; font-size: 13px; cursor: pointer; box-shadow: var(--shadow-md);
+}
+.assistant-fab:hover { border-color: var(--primary); }
+.assistant-panel {
+  position: fixed; right: 18px; bottom: 18px; z-index: 40;
+  width: min(400px, calc(100vw - 36px)); height: min(600px, calc(100vh - 36px));
+  display: flex; flex-direction: column; overflow: hidden;
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+  box-shadow: var(--shadow-lg);
+}
+.assistant-head { display: flex; align-items: center; gap: 6px; padding: 10px 12px; border-bottom: 1px solid var(--border); }
+.assistant-title { display: flex; align-items: center; gap: 7px; font-weight: 600; color: var(--primary); }
+.assistant-body { flex: 1; overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 10px; }
+.assistant-empty { color: var(--text-dim); display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
+.assistant-empty p { margin: 0 0 4px; }
+.assistant-chip {
+  text-align: left; padding: 7px 11px; border-radius: 999px; font-size: 12.5px; cursor: pointer;
+  border: 1px solid var(--border); background: var(--surface-2); color: var(--text);
+}
+.assistant-chip:hover { border-color: var(--primary); }
+.assistant-msg { max-width: 88%; padding: 8px 11px; border-radius: var(--radius); line-height: 1.45; font-size: 13px; overflow-wrap: anywhere; }
+.assistant-msg.user { align-self: flex-end; background: var(--primary); color: var(--primary-text); white-space: pre-wrap; }
+.assistant-msg.assistant { align-self: flex-start; background: var(--surface-2); color: var(--text); }
+.assistant-msg.error { border: 1px solid var(--danger, #d92d20); }
+.assistant-msg p { margin: 0 0 6px; }
+.assistant-msg p:last-child, .assistant-msg ul:last-child, .assistant-msg ol:last-child { margin-bottom: 0; }
+.assistant-msg ul, .assistant-msg ol { margin: 0 0 6px; padding-left: 18px; }
+.assistant-msg code { font-family: var(--mono); font-size: 12px; }
+.assistant-typing { color: var(--text-dim); font-style: italic; }
+.assistant-input { display: flex; gap: 8px; align-items: flex-end; padding: 10px 12px 4px; border-top: 1px solid var(--border); }
+.assistant-input textarea { flex: 1; resize: none; min-height: 40px; }
+.assistant-note { margin: 0; padding: 0 12px 8px; font-size: 11px; color: var(--text-dim); }
+
+/* ---- AI test design (Enterprise screens; badge states used there) ---- */
+.badge.queued, .badge.running { background: var(--info-bg); color: var(--info); border-color: transparent; }
+.badge.failed { background: var(--danger-bg); color: var(--danger); border-color: transparent; }
+.badge.accepted { background: var(--success-bg); color: var(--success); border-color: transparent; }
+.ai-suggestion { display: flex; flex-direction: column; gap: 10px; }
+.ai-suggestion.decided { opacity: 0.72; }
+.ai-suggestion-head { display: flex; align-items: flex-start; gap: 10px; flex-wrap: wrap; }
+.ai-suggestion-head h3 { margin: 0; font-size: 15px; flex: 1 1 260px; }
+.ai-steps { width: 100%; border-collapse: collapse; font-size: 13px; }
+.ai-steps th, .ai-steps td { text-align: left; vertical-align: top; padding: 6px 8px; border-top: 1px solid var(--border); }
+.ai-steps th { color: var(--text-dim); font-weight: 600; font-size: 12px; }
+.ai-steps td:first-child { width: 28px; color: var(--text-dim); }
+.ai-focus-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 6px 14px; }
+.ai-focus-grid label { display: flex; gap: 7px; align-items: flex-start; font-size: 13px; }

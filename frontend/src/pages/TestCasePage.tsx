@@ -102,6 +102,9 @@ export function TestCasePage() {
                 v{v.version_number} <Badge value={v.status} />
               </h3>
               {v.id === t.approved_version_id && <span className="badge approved">approved</span>}
+              {v.source_type === "ai_generated" && (
+                <span className="pill" title="Drafted by AI from a suggestion a test manager accepted">AI-generated</span>
+              )}
             </div>
             {v.description && <p className="muted">{v.description}</p>}
             {v.preconditions && (

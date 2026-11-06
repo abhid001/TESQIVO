@@ -2,7 +2,8 @@ import { useMemo, useRef, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { http } from "../api/client";
-import { useProject } from "../api/hooks";
+import { useAiStatus, useProject } from "../api/hooks";
+import { edition } from "@edition";
 import type {
   ActivityItem,
   Defect,
@@ -106,6 +107,7 @@ export function RequirementsPage() {
   const { projectKey } = useParams();
   const { project } = useProject(projectKey);
   const pid = project?.id;
+  const ai = useAiStatus();
   const qc = useQueryClient();
   const toast = useToast();
   const [params, setParams] = useSearchParams();
@@ -374,6 +376,9 @@ export function RequirementsPage() {
           <button className="sm" onClick={() => downloadCsv("selected-requirements.csv", toCsv(allRows.filter((r) => selected.has(r.id))))}>
             {Icons.download} Export
           </button>
+          {ai.generator && edition.RequirementsBulkAction && (
+            <edition.RequirementsBulkAction projectId={pid!} requirementIds={[...selected]} onDone={clearSelection} />
+          )}
           <span className="spacer-flex" />
           <button className="icon-btn" onClick={clearSelection} aria-label="Clear selection">✕</button>
         </div>

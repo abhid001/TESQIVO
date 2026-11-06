@@ -26,9 +26,7 @@ async def test_version_reports_edition_and_features(client, issue_license):
 
 @pytest.mark.asyncio
 async def test_ee_feature_needs_a_license(client):
-    r = await client.post(
-        "/api/v1/ee/ai/draft-test-case", json={"requirement_text": "Users can reset their password"}
-    )
+    r = await client.get("/api/v1/ee/ai/options")
     assert r.status_code == 402
     assert r.json()["error"]["code"] == "LICENSE_REQUIRED"
 
@@ -36,19 +34,15 @@ async def test_ee_feature_needs_a_license(client):
 @pytest.mark.asyncio
 async def test_ee_feature_works_with_a_matching_license(client, admin, issue_license):
     issue_license(features=["ai"])
-    r = await admin.post(
-        "/api/v1/ee/ai/draft-test-case", json={"requirement_text": "Login must lock after 5 tries"}
-    )
+    r = await admin.get("/api/v1/ee/ai/options")
     assert r.status_code == 200, r.text
-    assert r.json()["status"] == "stub"
+    assert {f["value"] for f in r.json()["focus_areas"]} >= {"happy_path", "negative", "boundary"}
 
 
 @pytest.mark.asyncio
 async def test_ee_feature_rejected_when_license_lacks_it(client, issue_license):
     issue_license(features=["sso"])  # no "ai"
-    r = await client.post(
-        "/api/v1/ee/ai/draft-test-case", json={"requirement_text": "x"}
-    )
+    r = await client.get("/api/v1/ee/ai/options")
     assert r.status_code == 402
 
 

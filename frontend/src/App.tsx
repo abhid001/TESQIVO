@@ -9,11 +9,13 @@ import {
 } from "react-router-dom";
 import { useAuth, useRole, canManageProject, canAuthor } from "./auth/AuthContext";
 import { http } from "./api/client";
-import { useProject, useProjects } from "./api/hooks";
+import { useAiStatus, useProject, useProjects } from "./api/hooks";
+import { edition } from "@edition";
 import { Icons } from "./components/icons";
 import { Sidebar } from "./components/Sidebar";
 import { Topbar } from "./components/Topbar";
 import { FeedbackWidget } from "./components/FeedbackWidget";
+import { AssistantPanel } from "./components/AssistantPanel";
 import { PlainShell } from "./components/PlainShell";
 import { LoginPage } from "./pages/LoginPage";
 import { ProfilePage } from "./pages/ProfilePage";
@@ -91,6 +93,7 @@ function Shell() {
   const role = useRole(project?.id);
   const [collapsed, toggleCollapsed] = useCollapsed();
   const [navOpen, setNavOpen] = useState(false);
+  const ai = useAiStatus();
 
   // System administrators never enter the project shell — they work from the
   // Admin console only.
@@ -115,6 +118,7 @@ function Shell() {
 
   const tabs = [
     ...TABS,
+    ...(ai.generator ? edition.navItems : []),
     ...(canAuthor(role) ? [LOGS_TAB] : []),
     ...(canManageProject(role) ? [SETTINGS_TAB] : []),
   ];
@@ -166,10 +170,22 @@ function Shell() {
             />
             <Route path="backlog" element={<Navigate to="../requirements" replace />} />
             <Route path="settings" element={<ProjectSettingsPage />} />
+            {edition.routes.map((r) => (
+              <Route
+                key={r.path}
+                path={r.path}
+                element={
+                  // Like Logs: on a fresh load the status query is still in flight, so
+                  // wait for it instead of bouncing a deep link to the dashboard.
+                  !ai.loaded ? <p>Loading…</p> : ai.generator ? r.element : <Navigate to="../dashboard" replace />
+                }
+              />
+            ))}
             <Route path="*" element={<Navigate to="dashboard" replace />} />
           </Routes>
         </main>
       </div>
+      {ai.assistant && <AssistantPanel projectId={project?.id} />}
       <FeedbackWidget projectId={project?.id} />
     </div>
   );

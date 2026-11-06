@@ -30,3 +30,8 @@ def register_ee(app: FastAPI, *, prefix: str) -> None:
         edition(),
         f"{lic.customer} features={list(lic.features)}" if lic else "none",
     )
+
+
+def register_worker() -> None:
+    """Called by app.worker at startup: register Enterprise job handlers."""
+    from app.ee.ai import jobs  # noqa: F401 - @handler registration is the import side effect

@@ -48,6 +48,9 @@ _ROLE_MATRIX: dict[str, set[Role]] = {
     "attachment.manage": {Role.test_manager, Role.tester},
     "report.view": {Role.project_admin, Role.test_manager, Role.tester, Role.viewer},
     "project.read": {Role.project_admin, Role.test_manager, Role.tester, Role.viewer},
+    # Producing AI suggestions only. Accepting one creates a test case, so it also
+    # needs test_case.create (Test Manager, decision D-018).
+    "ai.generate": {Role.test_manager, Role.tester},
 }
 
 

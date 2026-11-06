@@ -105,6 +105,8 @@ async def create_test_case(
     scenario_id: uuid.UUID | None = None,
     steps: list[StepInput] | None = None,
     automation_status: str = "candidate",
+    source_type: str = "manual",
+    controlled_metadata: dict | None = None,
 ) -> TestCase:
     await _project(session, project_id)
     authz.authorize(actor, "test_case.create", project_id=project_id)
@@ -143,8 +145,10 @@ async def create_test_case(
         title=title.strip(),
         description=description,
         preconditions=preconditions,
+        controlled_metadata=controlled_metadata or {},
+        source_type=source_type,
         author_id=actor.id,
-        change_summary="Initial draft",
+        change_summary="Initial draft" if source_type == "manual" else f"Initial draft ({source_type})",
     )
     session.add(version)
     await session.flush()
@@ -163,7 +167,7 @@ async def create_test_case(
     audit.record(
         session, actor=actor, ctx=ctx, entity_type="test_case", action="test_case.created",
         entity_id=tc.id, entity_key=tc.key, project_id=project_id,
-        after={"title": tc.title, "version": 1},
+        after={"title": tc.title, "version": 1, "source_type": source_type},
     )
     await session.commit()
     return tc

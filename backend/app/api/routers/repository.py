@@ -63,6 +63,8 @@ class VersionOut(BaseModel):
     preconditions: str | None
     change_summary: str | None
     steps: list[StepModel]
+    source_type: str = "manual"
+    controlled_metadata: dict = {}
 
 
 class TestCaseOut(BaseModel):
@@ -239,6 +241,7 @@ async def list_versions(tc_id: str, actor: CurrentActor, db: DbSession) -> list[
             VersionOut(
                 id=str(v.id), version_number=v.version_number, status=v.status, title=v.title,
                 description=v.description, preconditions=v.preconditions, change_summary=v.change_summary,
+                source_type=v.source_type, controlled_metadata=v.controlled_metadata or {},
                 steps=[StepModel(action=s.action, expected_result=s.expected_result, is_required=s.is_required) for s in steps],
             )
         )
@@ -260,6 +263,7 @@ async def get_version(version_id: str, actor: CurrentActor, db: DbSession) -> Ve
     return VersionOut(
         id=str(v.id), version_number=v.version_number, status=v.status, title=v.title,
         description=v.description, preconditions=v.preconditions, change_summary=v.change_summary,
+        source_type=v.source_type, controlled_metadata=v.controlled_metadata or {},
         steps=[StepModel(action=s.action, expected_result=s.expected_result, is_required=s.is_required) for s in steps],
     )
 

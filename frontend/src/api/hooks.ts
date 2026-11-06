@@ -16,3 +16,15 @@ export function useProject(projectKey: string | undefined) {
 export function useList<T>(key: unknown[], path: string, enabled = true) {
   return useQuery({ queryKey: key, queryFn: () => http.get<T>(path), enabled });
 }
+
+/** Which AI features to offer: the help assistant (any edition, when an API key is
+ *  configured) and the test-case generator (Enterprise + licence "ai"). */
+export function useAiStatus() {
+  const q = useQuery({
+    queryKey: ["assistant-status"],
+    queryFn: () => http.get<{ assistant: boolean; generator: boolean }>("/assistant/status"),
+    staleTime: 5 * 60_000,
+    retry: false,
+  });
+  return { assistant: !!q.data?.assistant, generator: !!q.data?.generator, loaded: !q.isPending };
+}

@@ -247,3 +247,44 @@ def _b64url_d(s: str) -> bytes:
     import base64
 
     return base64.urlsafe_b64decode(s + "=" * (-len(s) % 4))
+
+
+class FakeAiProvider:
+    """Stands in for the Anthropic adapter: records calls, returns canned output."""
+
+    name = "fake"
+    model = "fake-model"
+
+    def __init__(self):
+        self.calls: list[dict] = []
+        self.chunks: list[str] = ["Open **Test Cases**", " and click **New test case**."]
+        self.json_data: dict | None = None
+        self.error: Exception | None = None
+
+    async def stream_text(self, *, system, messages, effort, max_tokens):
+        self.calls.append({"kind": "stream", "system": system, "messages": messages, "effort": effort})
+        for c in self.chunks:
+            yield c
+        if self.error is not None:
+            raise self.error
+
+    async def generate_json(self, *, system, prompt, schema, effort, max_tokens):
+        from app.domain.ai.provider import JsonResult, Usage
+
+        self.calls.append({"kind": "json", "system": system, "prompt": prompt, "schema": schema})
+        if self.error is not None:
+            raise self.error
+        return JsonResult(data=self.json_data or {}, model=self.model, usage=Usage(100, 200, 0))
+
+
+@pytest.fixture
+def fake_ai():
+    from app.domain.ai import quota
+    from app.domain.ai.provider import set_provider_for_tests
+
+    fake = FakeAiProvider()
+    set_provider_for_tests(fake)
+    quota.reset_for_tests()
+    yield fake
+    set_provider_for_tests(None)
+    quota.reset_for_tests()

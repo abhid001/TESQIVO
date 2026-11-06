@@ -169,6 +169,9 @@ export interface Version {
   preconditions: string | null;
   change_summary: string | null;
   steps: Step[];
+  /** "manual" | "import" | "ai_generated" */
+  source_type: string;
+  controlled_metadata: Record<string, unknown>;
 }
 
 export interface Plan {
