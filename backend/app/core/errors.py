@@ -114,6 +114,13 @@ class SetupAlreadyCompleted(DomainError):
     status = 409
 
 
+class LicenseRequired(DomainError):
+    """An Enterprise feature was called without a valid license covering it."""
+
+    code = "LICENSE_REQUIRED"
+    status = 402
+
+
 def error_envelope(err: DomainError, correlation_id: str) -> dict[str, Any]:
     return {
         "error": {

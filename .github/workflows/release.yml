@@ -15,12 +15,12 @@ permissions:
   packages: write
 
 jobs:
-  image:
+  community:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
 
-      - name: Build and push to GHCR
+      - name: Build and push the Community image
         env:
           REF: ${{ github.ref }}
           REPO: ${{ github.repository }}
@@ -53,6 +53,51 @@ jobs:
             --platform "$platforms" \
             --build-arg "TESQIVO_VERSION=$version" \
             --provenance false \
-            $tags \
-            --push \
-            .
+            $tags --push .
+
+  enterprise:
+    runs-on: ubuntu-latest
+    needs: [community]
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Build and push the Enterprise image (private)
+        env:
+          REF: ${{ github.ref }}
+          REPO: ${{ github.repository }}
+          ACTOR: ${{ github.actor }}
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PUBKEY: ${{ vars.TESQIVO_LICENSE_PUBKEY }}
+        run: |
+          set -eu
+          base="ghcr.io/$(printf '%s' "$REPO" | tr '[:upper:]' '[:lower:]')"
+          ee="${base}-enterprise"
+
+          case "$REF" in
+            refs/tags/v*)
+              v="${REF#refs/tags/}"
+              from="$base:$v"
+              tags="-t $ee:$v -t $ee:${v%.*} -t $ee:latest"
+              platforms="linux/amd64,linux/arm64"
+              version="$v"
+              ;;
+            *)
+              from="$base:edge"
+              tags="-t $ee:edge"
+              platforms="linux/amd64"
+              version="edge-$(git rev-parse --short HEAD)"
+              ;;
+          esac
+
+          echo "$TOKEN" | docker login ghcr.io -u "$ACTOR" --password-stdin
+          docker run --privileged --rm tonistiigi/binfmt --install arm64
+          docker buildx create --use --driver docker-container
+
+          # shellcheck disable=SC2086
+          docker buildx build -f Dockerfile.enterprise \
+            --platform "$platforms" \
+            --build-arg "COMMUNITY_IMAGE=$from" \
+            --build-arg "TESQIVO_VERSION=$version" \
+            --build-arg "TESQIVO_LICENSE_PUBKEY=$PUBKEY" \
+            --provenance false \
+            $tags --push .

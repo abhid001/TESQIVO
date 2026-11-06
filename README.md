@@ -1,11 +1,12 @@
 # TESQIVO
 
-API-first test management and quality engineering platform, self-hosted via
-Docker Compose. Proprietary — source-available for authorized evaluation only
-(see [LICENSE](LICENSE)). See
-[`docs/TESQIVO_Product_Requirements_v4.md`](docs/TESQIVO_Product_Requirements_v4.md)
-for the product specification and [`docs/architecture/`](docs/architecture/) for the
-design artifacts (14 diagrams, decision log, metric fixtures).
+Open-source, API-first test management and quality engineering platform,
+self-hosted via Docker Compose. The Community edition is **AGPL-3.0** and free;
+a proprietary **Enterprise** edition adds paid features (LLM-assisted authoring
+first). See [`LICENSING.md`](LICENSING.md) and [`docs/enterprise.md`](docs/enterprise.md).
+
+Product spec: [`docs/TESQIVO_Product_Requirements_v4.md`](docs/TESQIVO_Product_Requirements_v4.md).
+Design artifacts (14 diagrams, decision log, metric fixtures): [`docs/architecture/`](docs/architecture/).
 
 ```
 Requirement → Test Case → Test Plan → Test Cycle → Test Execution → Defect → Release evidence
@@ -96,9 +97,21 @@ make backup                                   # → ./backups/
 make restore BACKUP=backups/db-XXXX.dump ATTACH=backups/appdata-XXXX.tgz
 ```
 
+## Editions
+
+| | Community | Enterprise |
+|---|---|---|
+| Licence | **AGPL-3.0** — free, self-host in production | Proprietary — subscription |
+| Install | `docker compose -f docker-compose.yml up -d` | `+ -f docker-compose.enterprise.yml` and a license key |
+| Image | `ghcr.io/abhid001/tesqivo` (public) | `ghcr.io/abhid001/tesqivo-enterprise` (private) |
+| Adds | — | AI-assisted authoring (`/api/v1/ee/*`), more as released |
+
+Enterprise is the same app plus the proprietary `backend/app/ee/` subtree — see
+[`docs/enterprise.md`](docs/enterprise.md).
+
 ## License
 
-Proprietary — Copyright © 2026 Abhishek Dixit, all rights reserved. This is **not**
-open-source software. Access is granted for authorized evaluation only; no right to
-use in production, redistribute, or disclose is granted except by separate written
-agreement. See [LICENSE](LICENSE).
+Community edition: **GNU AGPL-3.0** ([LICENSE](LICENSE)). The `backend/app/ee/`,
+`frontend/src/ee/` and `Dockerfile.enterprise` paths are proprietary — see
+[`LICENSING.md`](LICENSING.md). Contributions are under the
+[DCO](https://developercertificate.org/) (`git commit -s`).

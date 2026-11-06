@@ -1,0 +1,9 @@
+TESQIVO Enterprise — Proprietary License
+
+Copyright (c) 2026 Abhishek Dixit. All rights reserved.
+
+This directory contains proprietary Enterprise-edition UI code. It is NOT licensed
+under the GNU AGPL-3.0 that covers the rest of this repository. See
+`backend/app/ee/LICENSE` and `LICENSING.md` at the repository root.
+
+It is compiled only into the private `tesqivo-enterprise` image.

@@ -24,6 +24,7 @@ os.environ.setdefault("TESQIVO_ARGON2_TIME_COST", "1")
 os.environ.setdefault("TESQIVO_ARGON2_MEMORY_COST_KIB", "8192")
 os.environ.setdefault("TESQIVO_ARGON2_PARALLELISM", "1")
 
+import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 
@@ -172,3 +173,77 @@ async def project(admin) -> dict:
 
 def uid() -> str:
     return str(uuid.uuid4())
+
+
+@pytest.fixture
+def ee_keypair():
+    """A throwaway Ed25519 keypair (b64url, unpadded) for license tests."""
+    import base64
+
+    from cryptography.hazmat.primitives import serialization
+    from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+
+    def _b64(b: bytes) -> str:
+        return base64.urlsafe_b64encode(b).decode().rstrip("=")
+
+    priv = Ed25519PrivateKey.generate()
+    priv_b64 = _b64(
+        priv.private_bytes(
+            serialization.Encoding.Raw, serialization.PrivateFormat.Raw, serialization.NoEncryption()
+        )
+    )
+    pub_b64 = _b64(
+        priv.public_key().public_bytes(serialization.Encoding.Raw, serialization.PublicFormat.Raw)
+    )
+    return priv_b64, pub_b64
+
+
+@pytest.fixture
+def issue_license(ee_keypair, monkeypatch):
+    """Install `pub` on the running Settings and return an issuer for signed keys.
+
+    Usage:
+        key = issue_license(features=["ai"])           # sets TESQIVO_LICENSE_KEY too
+        key = issue_license(features=["ai"], exp_delta=-10)   # already expired
+    """
+    import base64
+    import json
+    import time
+
+    from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+
+    from app.core import license as lic_mod
+    from app.core.config import get_settings
+
+    priv_b64, pub_b64 = ee_keypair
+    settings = get_settings()
+    monkeypatch.setattr(settings, "license_pubkey", pub_b64, raising=False)
+    monkeypatch.setattr(settings, "license_key_file", "/nonexistent/license.key", raising=False)
+
+    def _b64(b: bytes) -> str:
+        return base64.urlsafe_b64encode(b).decode().rstrip("=")
+
+    def _issue(*, features, seats=0, exp_delta=3600, sub="acme", install=True, tamper=False) -> str:
+        now = int(time.time())
+        payload = {
+            "iss": "tesqivo", "sub": sub, "features": list(features),
+            "iat": now, "exp": 0 if exp_delta is None else now + exp_delta, "seats": seats,
+        }
+        pb = _b64(json.dumps(payload, separators=(",", ":"), sort_keys=True).encode())
+        sig = _b64(Ed25519PrivateKey.from_private_bytes(_b64url_d(priv_b64)).sign(pb.encode()))
+        key = f"{pb}.{sig}"
+        if tamper:
+            key = key[:-2] + ("aa" if not key.endswith("aa") else "bb")
+        if install:
+            monkeypatch.setattr(settings, "license_key", key, raising=False)
+            lic_mod.reset_cache_for_tests()
+        return key
+
+    yield _issue
+    lic_mod.reset_cache_for_tests()
+
+
+def _b64url_d(s: str) -> bytes:
+    import base64
+
+    return base64.urlsafe_b64decode(s + "=" * (-len(s) % 4))

@@ -5,6 +5,8 @@ alongside PostgreSQL and Redis. There is no source checkout and no build step.
 
 - **Time to a working instance:** ~2 minutes.
 - **Image:** `ghcr.io/abhid001/tesqivo` (public, GitHub Container Registry).
+- **Edition:** this is the free **Community** edition (AGPL-3.0). For the paid
+  Enterprise edition see [`docs/enterprise.md`](docs/enterprise.md).
 
 ---
 

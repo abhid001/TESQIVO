@@ -1,0 +1,22 @@
+name: tesqivo
+
+# Enterprise overlay. Requires a subscription (private image + a license key).
+# See docs/enterprise.md.
+#
+#   export TESQIVO_LICENSE_KEY=...        # or put it in /data/license.key
+#   docker compose -f docker-compose.yml -f docker-compose.enterprise.yml up -d
+#
+# A later LLM release adds provider config here (TESQIVO_LLM_PROVIDER / key, or a
+# sidecar). Enterprise pull access to ghcr.io/abhid001/tesqivo-enterprise is
+# granted per customer; `docker login ghcr.io` with your token first.
+
+services:
+  web:
+    image: ghcr.io/abhid001/tesqivo-enterprise:${TESQIVO_VERSION:-latest}
+    environment:
+      TESQIVO_LICENSE_KEY: ${TESQIVO_LICENSE_KEY:-}
+
+  worker:
+    image: ghcr.io/abhid001/tesqivo-enterprise:${TESQIVO_VERSION:-latest}
+    environment:
+      TESQIVO_LICENSE_KEY: ${TESQIVO_LICENSE_KEY:-}

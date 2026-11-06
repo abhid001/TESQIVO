@@ -1,4 +1,4 @@
-"""TESQIVO - API-first test management platform (Phase 1)."""
+"""TESQIVO - open-source API-first test management platform (AGPL-3.0)."""
 
 import os
 

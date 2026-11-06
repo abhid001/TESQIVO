@@ -1,0 +1,30 @@
+TESQIVO Enterprise — Proprietary License
+
+Copyright (c) 2026 Abhishek Dixit. All rights reserved.
+
+This directory and everything under it ("the Enterprise Software"), together with
+the `frontend/src/ee/` directory and the `tesqivo-enterprise` container image, are
+proprietary and are NOT licensed under the GNU AGPL-3.0 that covers the rest of
+this repository.
+
+1. No license granted
+   No right to use, copy, modify, distribute, sublicense, or create derivative
+   works of the Enterprise Software is granted, express or implied, except under a
+   separate written agreement with the copyright holder (an "Enterprise
+   subscription").
+
+2. Evaluation
+   Building the Enterprise Software or running the `tesqivo-enterprise` image for
+   evaluation is permitted only with a valid, unexpired `TESQIVO_LICENSE_KEY`
+   issued by the copyright holder, and only for the term that key permits.
+
+3. The Community edition is unaffected
+   The rest of TESQIVO — everything outside `backend/app/ee/`, `frontend/src/ee/`
+   and `Dockerfile.enterprise` — is free software under the GNU Affero General
+   Public License v3.0 (see the repository-root `LICENSE`). You may run, modify,
+   and self-host the Community edition with no Enterprise subscription.
+
+4. No warranty
+   THE ENTERPRISE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND.
+
+For an Enterprise subscription, contact the copyright holder.

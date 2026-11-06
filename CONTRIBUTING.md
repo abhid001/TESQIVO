@@ -52,9 +52,19 @@ root `Dockerfile`; always test through `make up` before opening a PR.
 8. Every increment ships with migrations, tests, and updated OpenAPI. A feature is
    done only when tests pass in Docker Compose.
 
+## Licensing & the DCO
+
+The Community edition is **AGPL-3.0**; `backend/app/ee/`, `frontend/src/ee/` and
+`Dockerfile.enterprise` are proprietary (see `LICENSING.md`). Contributions to the
+Community edition are accepted under the
+[Developer Certificate of Origin](https://developercertificate.org/) — **sign
+every commit** with `git commit -s` (adds a `Signed-off-by:` trailer). Changes
+touching `ee/` need a separate agreement; open an issue first.
+
 ## Commit / PR conventions
 
 - Conventional-commit style subject (`feat(backend): …`, `fix(web): …`, `docs: …`).
+- `Signed-off-by:` trailer on every commit (`git commit -s`).
 - Reference the PRS section or increment number where relevant.
 - PRs must pass `ci.yml` (lint, backend tests on SQLite + PostgreSQL, migration
   round-trip, frontend typecheck/test/build, an image build, and a Compose smoke boot
@@ -70,8 +80,11 @@ To cut a release:
    `backend/app/__init__.py`, and move the `CHANGELOG.md` "Unreleased" notes under the new
    version heading.
 2. Merge to `main`, then tag: `git tag v0.2.0 && git push origin v0.2.0`.
-3. `.github/workflows/release.yml` builds and pushes
-   `ghcr.io/abhid001/tesqivo:{v0.2.0, 0.2, latest}` (multi-arch). `main` pushes also
-   publish `:edge`.
-4. **First release only:** set the GHCR package visibility to *public*
-   (repo → Packages → tesqivo → Package settings).
+3. `.github/workflows/release.yml` builds and pushes the **Community** image
+   `ghcr.io/abhid001/tesqivo:{vX.Y.Z, vX.Y, latest}` (multi-arch), then the
+   **Enterprise** image `…/tesqivo-enterprise:{same}` on top (`Dockerfile.enterprise`,
+   `FROM` the Community image, `TESQIVO_LICENSE_PUBKEY` from the
+   `TESQIVO_LICENSE_PUBKEY` repo *variable*). `main` pushes publish `:edge`.
+4. **First release only:** set the `tesqivo` GHCR package to *public*; keep
+   `tesqivo-enterprise` *private* and grant pull access per customer. Generate the
+   license keypair once — see `scripts/license/README.md`.

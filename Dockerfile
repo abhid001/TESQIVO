@@ -34,6 +34,8 @@ RUN pip install --upgrade pip && pip install .
 COPY backend/alembic.ini ./
 COPY backend/alembic ./alembic
 COPY backend/app ./app
+# The Community image never contains Enterprise code, even built from a full checkout.
+RUN rm -rf ./app/ee
 COPY backend/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 COPY --from=web-build /web/dist ./static
 
@@ -52,10 +54,10 @@ VOLUME ["/data"]
 HEALTHCHECK --interval=15s --timeout=3s --retries=5 \
     CMD curl -fsS http://localhost:8080/api/v1/healthz || exit 1
 
-LABEL org.opencontainers.image.title="TESQIVO" \
-      org.opencontainers.image.description="API-first test management platform" \
+LABEL org.opencontainers.image.title="TESQIVO Community" \
+      org.opencontainers.image.description="Open-source API-first test management platform" \
       org.opencontainers.image.source="https://github.com/abhid001/TESQIVO" \
-      org.opencontainers.image.licenses="LicenseRef-Proprietary"
+      org.opencontainers.image.licenses="AGPL-3.0-or-later"
 
 ENTRYPOINT ["docker-entrypoint.sh"]
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8080"]

@@ -1,0 +1,29 @@
+# TESQIVO Enterprise image = the Community image + the proprietary app/ee/ subtree.
+# PROPRIETARY - see backend/app/ee/LICENSE and LICENSING.md. Built and pushed only
+# by .github/workflows/release.yml to the PRIVATE ghcr.io/<owner>/tesqivo-enterprise.
+#
+#   docker build -f Dockerfile.enterprise \
+#     --build-arg COMMUNITY_IMAGE=ghcr.io/abhid001/tesqivo:v0.2.0 \
+#     --build-arg TESQIVO_LICENSE_PUBKEY=<b64 ed25519 public key> \
+#     -t tesqivo-enterprise:local .
+
+ARG COMMUNITY_IMAGE=ghcr.io/abhid001/tesqivo:latest
+FROM ${COMMUNITY_IMAGE}
+
+USER root
+COPY backend/pyproject.toml ./pyproject.toml
+COPY backend/app/ee ./app/ee
+RUN pip install --no-cache-dir 'cryptography>=42,<46' \
+    && chown -R tesqivo /app/app/ee
+
+ARG TESQIVO_VERSION=0.0.0-dev
+ARG TESQIVO_LICENSE_PUBKEY=""
+ENV TESQIVO_VERSION=$TESQIVO_VERSION \
+    TESQIVO_LICENSE_PUBKEY=$TESQIVO_LICENSE_PUBKEY \
+    TESQIVO_LICENSE_KEY_FILE=/data/license.key
+
+USER tesqivo
+
+LABEL org.opencontainers.image.title="TESQIVO Enterprise" \
+      org.opencontainers.image.description="TESQIVO with Enterprise features (LLM-assisted authoring, ...)" \
+      org.opencontainers.image.licenses="LicenseRef-Proprietary"

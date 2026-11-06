@@ -6,9 +6,21 @@ All notable changes to TESQIVO are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+- **Enterprise edition scaffolding** (D-021). Proprietary `backend/app/ee/` subtree,
+  imported at runtime only when present; a signed Ed25519 `TESQIVO_LICENSE_KEY`
+  gates paid features (`app/core/license.py`, `require_feature`, 402
+  `LICENSE_REQUIRED`). Two images — public `tesqivo` (Community) and private
+  `tesqivo-enterprise` (`Dockerfile.enterprise`). `docker-compose.enterprise.yml`
+  overlay, `scripts/license/` tooling, `docs/enterprise.md`.
+- `GET /api/v1/version` now reports `edition` and licensed `features`.
+- Stub `POST /api/v1/ee/ai/draft-test-case` (real LLM generation lands later).
+
 ### Changed
-- **License is now Proprietary** (`LICENSE`) — not open-source. Source-available for
-  authorized evaluation only. Supersedes the earlier proposed Apache-2.0 (D-012).
+- **Relicensed to open-core**: Community edition is **AGPL-3.0** (`LICENSE`);
+  `backend/app/ee/`, `frontend/src/ee/` and `Dockerfile.enterprise` are proprietary
+  (`LICENSING.md`). Reverses the interim all-rights-reserved position (D-012).
+- Contributions now require a DCO sign-off (`git commit -s`).
 - All product-requirements documents moved from `project_docs/` into `docs/`.
 
 ## [0.2.0] — 2026-09-01

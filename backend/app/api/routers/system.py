@@ -22,8 +22,15 @@ async def liveness() -> dict[str, str]:
 
 
 @router.get("/version")
-async def version() -> dict[str, str]:
-    return {"version": __version__, "environment": get_settings().environment}
+async def version() -> dict[str, object]:
+    from app.core.license import edition, licensed_features
+
+    return {
+        "version": __version__,
+        "environment": get_settings().environment,
+        "edition": edition(),
+        "features": licensed_features(),
+    }
 
 
 @router.get("/readyz")
